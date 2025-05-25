@@ -1,10 +1,9 @@
 import 'package:djmobilapp/profile.dart';
 import 'package:djmobilapp/register_page.dart';
+import 'package:djmobilapp/search_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'authpage.dart';
-import 'communitypage.dart';
 import 'freepage.dart';
 import 'homepage.dart';
 import 'login_page.dart';
@@ -84,7 +83,7 @@ class _MainHomePageState extends State<MainHomePage> {
   String? userId;
   final List<Widget> _pages = [
     HomeScreen(),
-    CommunityScreen(),
+    SearchScreen(), // CommunityScreen yerine SearchScreen kullanıyoruz
     MyBangsScreen(),
     ProfileScreen(),
   ];
@@ -143,7 +142,7 @@ class _MainHomePageState extends State<MainHomePage> {
 
     String title;
     switch (_currentIndex) {
-      case 1: title = 'Search'; break;
+      case 1: title = 'Ara'; break;
       case 2: title = 'My Bangs'; break;
       case 3: title = 'Profile'; break;
       default: title = 'App';
@@ -206,7 +205,7 @@ class _MainHomePageState extends State<MainHomePage> {
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.search),
-              label: 'Search',
+              label: 'Ara',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.favorite_border),
