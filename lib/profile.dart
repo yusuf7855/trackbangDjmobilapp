@@ -549,7 +549,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     } else if (userData?['profileImage'] != null &&
         userData!['profileImage'].isNotEmpty &&
         userData!['profileImage'] != 'image.jpg') {
-      return NetworkImage('${UrlConstants.apiBaseUrl}/uploads/${userData!['profileImage']}');
+      return NetworkImage('${UrlConstants.apiBaseUrl}${userData!['profileImage']}');
     }
     return const AssetImage('assets/default_profile.png');
   }
