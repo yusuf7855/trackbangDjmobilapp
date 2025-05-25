@@ -58,14 +58,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
     if (mounted) {
       setState(() {
         authToken = prefs.getString('auth_token');
-        // Hem userId hem de user_id'yi kontrol et (tutarlılık için)
         currentUserId = prefs.getString('userId') ?? prefs.getString('user_id');
         isCurrentUser = currentUserId == widget.userId;
       });
-      print('Auth token loaded: ${authToken != null}'); // Debug log
-      print('Current user ID: $currentUserId'); // Debug log
-      print('Viewing user ID: ${widget.userId}'); // Debug log
-      print('Is current user: $isCurrentUser'); // Debug log
+      print('Auth token loaded: ${authToken != null}');
+      print('Current user ID: $currentUserId');
+      print('Viewing user ID: ${widget.userId}');
+      print('Is current user: $isCurrentUser');
     }
   }
 
@@ -262,152 +261,197 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
     );
   }
 
-  // Ana profil header
-  Widget _buildProfileHeader() {
+  // YENİ: Modern ve şık profil header tasarımı
+  Widget _buildModernProfileHeader() {
     return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
-      ),
       child: Column(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Profil Fotoğrafı
-              CircleAvatar(
-                radius: 45,
-                backgroundImage: _getProfileImage(),
-              ),
-              const SizedBox(width: 20),
+          // Gradient background section
+          Container(
+            height: 160,
 
-              // Profil bilgileri
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // İsim ve kullanıcı adı
-                    Text(
-                      '${userData?['firstName']} ${userData?['lastName']}',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '@${userData?['username']}',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-
-                    // Biyografi - compact hali
-                    if (userData?['bio'] != null && userData!['bio'].isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        userData!['bio'],
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                          height: 1.3,
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-
-                    const SizedBox(height: 16),
-
-                    // İstatistikler
-                    Row(
-                      children: [
-                        _buildCompactStat(followerCount, "Takipçi"),
-                        const SizedBox(width: 20),
-                        _buildCompactStat(followingCount, "Takip"),
-                        const SizedBox(width: 20),
-                        _buildCompactStat(playlists.length, "Playlist"),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Linkler - daha compact
-          if (userData?['profileLinks'] != null && (userData!['profileLinks'] as List).isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: (userData!['profileLinks'] as List).take(3).map((link) {
-                return InkWell(
-                  onTap: () => _launchURL(link['url']),
+            child: Stack(
+              children: [
+                // Background pattern
+                Positioned.fill(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.grey[800],
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.grey[600]!),
+                      backgroundBlendMode: BlendMode.overlay,
+                      color: Colors.black.withOpacity(0.3),
                     ),
+                  ),
+                ),
+                // Profile content
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Icon(Icons.link, color: Colors.white70, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          link['title'],
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                        // Profile picture with border
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 4,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 20,
+                                offset: Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _getProfileImage(),
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        // User info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${userData?['firstName']} ${userData?['lastName']}',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black54,
+                                      blurRadius: 10,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Text(
+                                  '@${userData?['username']}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                );
-              }).toList(),
+                ),
+              ],
             ),
-          ],
+          ),
 
-          // Takip butonu (sadece başka kullanıcılar için)
-          if (!isCurrentUser && authToken != null) ...[
-            const SizedBox(height: 20),
-            _buildFollowButton(),
-          ],
+          // White section with stats and follow button
+          Container(
+            color: Colors.black,
+            child: Column(
+              children: [
+                // Bio section
+                if (userData?['bio'] != null && userData!['bio'].isNotEmpty) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+
+                    child: Text(
+                      userData!['bio'],
+                      style: const TextStyle(
+
+                        color: Colors.white70,
+                        fontSize: 15,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                ],
+
+                // Stats row
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildStatItem(followerCount, "Takipçi", Icons.people),
+                      _buildStatDivider(),
+                      _buildStatItem(followingCount, "Takip", Icons.person_add),
+                      _buildStatDivider(),
+                      _buildStatItem(playlists.length, "Playlist", Icons.library_music),
+                    ],
+                  ),
+                ),
+                if (userData?['profileLinks'] != null &&
+                    (userData!['profileLinks'] as List).isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _buildLinksSection(),
+                ],
+                // Follow button - ARTIK GÖRÜNECEk
+                if (!isCurrentUser && authToken != null) ...[
+                  const SizedBox(height: 10),
+                  _buildModernFollowButton(),
+                ],
+
+                // Links section
+
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCompactStat(int count, String label) {
+  Widget _buildStatItem(int count, String label, IconData icon) {
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.grey[900],
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.grey[800],
+            shape: BoxShape.circle,
             border: Border.all(color: Colors.grey[700]!),
           ),
-          child: Text(
-            count.toString(),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 20,
           ),
         ),
         const SizedBox(height: 8),
+        Text(
+          count.toString(),
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
         Text(
           label,
           style: TextStyle(
@@ -420,39 +464,106 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
     );
   }
 
-  Widget _buildFollowButton() {
-    print('Building follow button - isCurrentUser: $isCurrentUser, authToken: ${authToken != null}'); // Debug log
-
+  Widget _buildStatDivider() {
     return Container(
+      height: 40,
+      width: 1,
+      color: Colors.grey[700],
+    );
+  }
+
+  Widget _buildModernFollowButton() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       width: double.infinity,
+      height: 56,
       decoration: BoxDecoration(
-        color: isFollowing ? Colors.grey[700] : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[600]!),
+        color: Colors.white, // Arka plan beyaz
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFollowing ? Colors.grey : Colors.black, // Kenarlık rengi duruma göre
+          width: 1.5,
+        ),
       ),
       child: ElevatedButton(
         onPressed: toggleFollow,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white, // Düğme arka planı beyaz
           shadowColor: Colors.transparent,
-          padding: const EdgeInsets.symmetric(vertical: 15),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
-        child: Text(
-          isFollowing ? "Takibi Bırak" : "Takip Et",
-          style: TextStyle(
-            fontSize: 16,
-            color: isFollowing ? Colors.white : Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isFollowing ? Icons.person_remove : Icons.person_add,
+              color: isFollowing ? Colors.grey[800] : Colors.black,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isFollowing ? "Takibi Bırak" : "Takip Et",
+              style: TextStyle(
+                fontSize: 16,
+                color: isFollowing ? Colors.grey[800] : Colors.black,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // Fotoğraf galerisi
+
+  Widget _buildLinksSection() {
+    final links = userData!['profileLinks'] as List;
+    return Container(
+      padding: const EdgeInsets.all(6),
+
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ...links.map((link) => Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: InkWell(
+              onTap: () => _launchURL(link['url']),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[700]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.open_in_new, color: Colors.white70, size: 18),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        link['title'],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 14),
+                  ],
+                ),
+              ),
+            ),
+          )).toList(),
+        ],
+      ),
+    );
+  }
+
+  // Fotoğraf galerisi - aynı kalacak
   Widget _buildPhotoGallery() {
     final additionalImages = userData?['additionalImages'] as List<dynamic>? ?? [];
     if (additionalImages.isEmpty) {
@@ -460,13 +571,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 6),
+      padding: const EdgeInsets.all(9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -475,7 +581,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
               Icon(Icons.photo_library, color: Colors.white, size: 20),
               SizedBox(width: 8),
               Text(
-                "Fotoğraflar",
+                "Pictures",
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -889,15 +995,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
 
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 0,
-        title: Text(
-          '${userData!['firstName']} ${userData!['lastName']}',
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
       body: SafeArea(
         child: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -905,8 +1002,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
               SliverToBoxAdapter(
                 child: Column(
                   children: [
-                    // Ana profil header
-                    _buildProfileHeader(),
+                    // YENİ: Modern profil header
+                    _buildModernProfileHeader(),
                     const SizedBox(height: 16),
 
                     // Fotoğraf galerisi
@@ -952,7 +1049,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
   }
 }
 
-// Fotoğraf galerisi için dialog widget
+// Fotoğraf galerisi için dialog widget - aynı kalacak
 class ImageGalleryDialog extends StatefulWidget {
   final List<Map<String, dynamic>> images;
   final int initialIndex;
