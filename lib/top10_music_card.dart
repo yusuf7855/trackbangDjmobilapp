@@ -219,7 +219,7 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                   itemBuilder: (context, index) {
                     final playlist = userPlaylists[index];
                     return Container(
-                      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         color: Colors.grey[700]?.withOpacity(0.5),
@@ -396,32 +396,32 @@ class _Top10MusicCardState extends State<Top10MusicCard>
     }
 
     Widget badge = Container(
-      width: 60,
-      height: 60,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         color: badgeColor,
         shape: BoxShape.circle,
         border: Border.all(
           color: widget.rank <= 3 ? Colors.white : Colors.grey[600]!,
-          width: 3,
+          width: 2,
         ),
         boxShadow: hasGlow ? [
           BoxShadow(
-            color: badgeColor.withOpacity(0.5),
-            blurRadius: 15,
-            spreadRadius: 2,
+            color: badgeColor.withOpacity(0.4),
+            blurRadius: 10,
+            spreadRadius: 1,
           ),
         ] : null,
       ),
       child: widget.rank <= 3 && icon != null
-          ? Icon(icon, color: textColor, size: 28)
+          ? Icon(icon, color: textColor, size: 24)
           : Center(
         child: Text(
           widget.rank.toString(),
           style: TextStyle(
             color: textColor,
             fontWeight: FontWeight.bold,
-            fontSize: 20,
+            fontSize: 16,
           ),
         ),
       ),
@@ -447,7 +447,7 @@ class _Top10MusicCardState extends State<Top10MusicCard>
     super.build(context);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -463,7 +463,7 @@ class _Top10MusicCardState extends State<Top10MusicCard>
             Colors.black,
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: widget.rank <= 3
               ? Colors.amber.withOpacity(0.3)
@@ -475,20 +475,20 @@ class _Top10MusicCardState extends State<Top10MusicCard>
             color: widget.rank <= 3
                 ? Colors.amber.withOpacity(0.1)
                 : Colors.black.withOpacity(0.3),
-            blurRadius: widget.rank <= 3 ? 15 : 8,
-            offset: Offset(0, widget.rank <= 3 ? 6 : 4),
+            blurRadius: widget.rank <= 3 ? 12 : 6,
+            offset: Offset(0, widget.rank <= 3 ? 4 : 2),
           ),
         ],
       ),
       child: Column(
         children: [
-          // Header with rank and track info
+          // Compact Header with rank and track info
           Container(
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.all(12),
             child: Row(
               children: [
                 _buildRankBadge(),
-                const SizedBox(width: 20),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,38 +497,43 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                         widget.track['title'] ?? 'Unknown Track',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        widget.track['artist'] ?? 'Unknown Artist',
-                        style: TextStyle(
-                          color: Colors.grey[400],
                           fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.bold,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[700]?.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(15),
+                      const SizedBox(height: 2),
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: widget.track['artist'] ?? 'Unknown Artist',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            TextSpan(
+                              text: ' • ',
+                              style: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 14,
+                              ),
+                            ),
+                            TextSpan(
+                              text: widget.track['category'] ?? 'Unknown',
+                              style: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
                         ),
-                        child: Text(
-                          widget.track['category'] ?? 'Unknown',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -537,29 +542,29 @@ class _Top10MusicCardState extends State<Top10MusicCard>
             ),
           ),
 
-          // Spotify Embed
+          // Spotify Embed - Reduced height
           Container(
-            height: 100,
-            margin: EdgeInsets.symmetric(horizontal: 16),
+            height: 80,
+            margin: EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: Colors.grey[700]!, width: 1),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               child: _isWebViewInitialized
                   ? WebViewWidget(controller: _webViewController)
                   : Container(
                 color: Colors.grey[800],
                 child: Center(
-                  child: Column(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.music_note, color: Colors.grey[600], size: 32),
-                      const SizedBox(height: 8),
+                      Icon(Icons.music_note, color: Colors.grey[600], size: 24),
+                      const SizedBox(width: 8),
                       Text(
                         'Loading...',
-                        style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
                       ),
                     ],
                   ),
@@ -568,34 +573,28 @@ class _Top10MusicCardState extends State<Top10MusicCard>
             ),
           ),
 
-          // Action Buttons
+          // Compact Action Buttons
           Container(
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.all(12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Like Button
+                // Like Button - Red when liked
                 if (widget.userId != null)
                   GestureDetector(
                     onTap: _toggleLike,
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: _isLikedByUser()
-                              ? [Colors.red, Colors.pink]
-                              : [Colors.grey[700]!, Colors.grey[800]!],
-                        ),
-                        borderRadius: BorderRadius.circular(25),
-                        boxShadow: [
+                        color: _isLikedByUser() ? Colors.red : Colors.grey[700],
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: _isLikedByUser() ? [
                           BoxShadow(
-                            color: _isLikedByUser()
-                                ? Colors.red.withOpacity(0.3)
-                                : Colors.black.withOpacity(0.2),
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
+                            color: Colors.red.withOpacity(0.3),
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
                           ),
-                        ],
+                        ] : null,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -603,14 +602,14 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                           Icon(
                             _isLikedByUser() ? Icons.favorite : Icons.favorite_border,
                             color: Colors.white,
-                            size: 20,
+                            size: 18,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Text(
                             '${widget.track['likes'] ?? 0}',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -624,65 +623,46 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                   GestureDetector(
                     onTap: _showAddToPlaylistDialog,
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue, Colors.indigo],
-                        ),
-                        borderRadius: BorderRadius.circular(25),
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.blue.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
                           ),
                         ],
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.playlist_add, color: Colors.white, size: 20),
-
-                        ],
-                      ),
+                      child: Icon(Icons.playlist_add, color: Colors.white, size: 18),
                     ),
                   ),
 
-                // Beatport Button
+                // Beatport Button - Always grey
                 if (widget.track['beatportUrl']?.isNotEmpty == true)
                   GestureDetector(
                     onTap: _launchBeatportUrl,
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: _isLikedByUser()
-                              ? [Colors.red, Colors.pink]
-                              : [Colors.grey[700]!, Colors.grey[800]!],
-                        ),
-                        borderRadius: BorderRadius.circular(25),
-                        boxShadow: [
-                          BoxShadow(
-
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
+                        color: Colors.grey[700],
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Image.asset(
                             'assets/beatport_logo.png',
-                            width: 18,
-                            height: 18,
+                            width: 16,
+                            height: 16,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Text(
                             'Beatport',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 14,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
