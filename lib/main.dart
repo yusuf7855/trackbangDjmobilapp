@@ -83,7 +83,7 @@ class _MainHomePageState extends State<MainHomePage> {
   String? userId;
   final List<Widget> _pages = [
     HomeScreen(),
-    SearchScreen(), // CommunityScreen yerine SearchScreen kullanıyoruz
+    SearchScreen(),
     MyBangsScreen(),
     ProfileScreen(),
   ];
@@ -98,7 +98,7 @@ class _MainHomePageState extends State<MainHomePage> {
   Future<void> _loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      userId = prefs.getString('user_id');
+      userId = prefs.getString('userId') ?? prefs.getString('user_id');
     });
   }
 
@@ -138,6 +138,7 @@ class _MainHomePageState extends State<MainHomePage> {
   }
 
   PreferredSizeWidget? _buildAppBar() {
+    // Only show AppBar for non-home pages since HomeScreen has its own AppBar
     if (_currentIndex == 0) return null;
 
     String title;
@@ -149,11 +150,14 @@ class _MainHomePageState extends State<MainHomePage> {
     }
 
     return AppBar(
-      title: Text(title),
+      title: Text(
+        title,
+        style: TextStyle(color: Colors.white),
+      ),
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
       leading: IconButton(
-        icon: Icon(Icons.arrow_back),
+        icon: Icon(Icons.arrow_back, color: Colors.white),
         onPressed: () {
           setState(() {
             _currentIndex = 0;
@@ -163,7 +167,7 @@ class _MainHomePageState extends State<MainHomePage> {
       actions: [
         if (_currentIndex == 3) // Only show logout on profile page
           IconButton(
-            icon: Icon(Icons.logout),
+            icon: Icon(Icons.logout, color: Colors.white),
             onPressed: _logout,
           ),
       ],
@@ -174,7 +178,7 @@ class _MainHomePageState extends State<MainHomePage> {
     return Container(
       height: 70,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.8),
+        color: Colors.black.withOpacity(0.9),
         border: Border(
           top: BorderSide(
             color: Colors.grey.withOpacity(0.2),
@@ -197,11 +201,13 @@ class _MainHomePageState extends State<MainHomePage> {
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
           iconSize: 28,
+          selectedFontSize: 12,
+          unselectedFontSize: 10,
           onTap: (index) => setState(() => _currentIndex = index),
           items: const [
             BottomNavigationBarItem(
-              icon: Icon(Icons.public),
-              label: 'Wall',
+              icon: Icon(Icons.home),
+              label: 'Ana Sayfa',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.search),

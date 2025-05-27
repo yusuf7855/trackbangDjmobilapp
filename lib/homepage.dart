@@ -7,7 +7,17 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import './url_constants.dart';
-import 'create_playlist.dart';
+import './create_playlist.dart';
+import './menu/listeler_screen.dart';
+import './menu/sample_bank_screen.dart';
+import './menu/mostening_screen.dart';
+import './menu/magaza_screen.dart';
+import './menu/biz_kimiz_screen.dart';
+import './login_page.dart';
+
+// Import the new common music player
+import './common_music_player.dart';
+import './top10_music_card.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -32,9 +42,6 @@ class _HomeScreenState extends State<HomeScreen>
   bool isLoadingHouse = true;
   bool isLoadingHot = true;
 
-  // WebView cache
-  final Map<String, WebViewController> _webViewCache = {};
-
   @override
   void initState() {
     super.initState();
@@ -45,7 +52,6 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     _tabController.dispose();
-    _webViewCache.clear();
     super.dispose();
   }
 
@@ -193,6 +199,133 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // Drawer builder
+  Widget _buildDrawer() {
+    return Drawer(
+      backgroundColor: Colors.black,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Image.asset(
+                  'assets/your_logo.png',
+                  height: 60,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'DJ Mobile App',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _buildDrawerItem(
+            icon: Icons.list,
+            title: 'Listeler',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ListelerScreen()),
+              );
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.library_music,
+            title: 'Samplebank',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SampleBankScreen()),
+              );
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.headset,
+            title: 'Mostening',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => MosteningScreen()),
+              );
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.store,
+            title: 'Mağaza',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => MagazaScreen()),
+              );
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.info,
+            title: 'Biz Kimiz',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => BizKimizScreen()),
+              );
+            },
+          ),
+          Divider(color: Colors.grey[700]),
+          _buildDrawerItem(
+            icon: Icons.logout,
+            title: 'Çıkış Yap',
+            onTap: () async {
+              Navigator.pop(context);
+              await _logout();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Text(
+        title,
+        style: TextStyle(color: Colors.white),
+      ),
+      onTap: onTap,
+      contentPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+    );
+  }
+
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => LoginPage()),
+          (Route<dynamic> route) => false,
+    );
+  }
+
   // Rank icon widget with medal colors
   Widget _buildRankIcon(int rank) {
     Color color;
@@ -283,236 +416,108 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildCategorySection(String title, List<dynamic> tracks) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
-      ),
+      margin: const EdgeInsets.only(bottom: 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Section Header
           Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.grey[850],
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.grey[850]!,
+                  Colors.grey[900]!,
+                ],
               ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey[700]!, width: 1),
             ),
             child: Row(
               children: [
-                Icon(Icons.trending_up, color: Colors.white, size: 24),
-                SizedBox(width: 12),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.amber, Colors.orange],
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.amber.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(Icons.trending_up, color: Colors.white, size: 28),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Most Liked Tracks',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    'TOP ${tracks.length}',
+                    style: TextStyle(
+                      color: Colors.amber,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+
+          const SizedBox(height: 16),
+
+          // Top 10 Music Cards
           ...tracks.asMap().entries.map((entry) {
             final index = entry.key;
             final track = entry.value;
-            return MusicCard(
+            return Top10MusicCard(
               track: track,
               rank: index + 1,
-              onLike: _toggleLike,
-              onAddToPlaylist: _showAddToPlaylistDialog,
-              key: ValueKey(track['_id']),
+              userId: userId,
+              onLikeChanged: () {
+                _loadTop10Data(); // Refresh data when like changes
+              },
             );
           }).toList(),
         ],
       ),
     );
-  }
-
-  Widget _buildSpotifyEmbed(String? spotifyId) {
-    if (spotifyId == null) return Container();
-
-    if (!_webViewCache.containsKey(spotifyId)) {
-      final controller = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(Colors.transparent)
-        ..loadRequest(Uri.parse(
-          'https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0',
-        ));
-
-      _webViewCache[spotifyId] = controller;
-    }
-
-    return SizedBox(
-      height: 80,
-      child: WebViewWidget(
-        controller: _webViewCache[spotifyId]!,
-        gestureRecognizers: Set()
-          ..add(Factory<VerticalDragGestureRecognizer>(
-                () => VerticalDragGestureRecognizer(),
-          )),
-      ),
-    );
-  }
-
-  // Helper methods for music interactions
-  Future<void> _toggleLike(String musicId) async {
-    if (userId == null) return;
-
-    try {
-      final response = await http.post(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/music/$musicId/like'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'userId': userId}),
-      );
-
-      if (response.statusCode == 200) {
-        _loadTop10Data(); // Refresh data
-      }
-    } catch (e) {
-      print('Error liking track: $e');
-    }
-  }
-
-  bool _isLikedByUser(Map<String, dynamic> track) {
-    return track['userLikes']?.contains(userId) ?? false;
-  }
-
-  Future<void> _launchBeatportUrl(String url) async {
-    try {
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.platformDefault);
-      }
-    } catch (e) {
-      print('Error launching URL: $e');
-    }
-  }
-
-  void _showAddToPlaylistDialog(String musicId) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Add to Playlist',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 20),
-            if (userPlaylists.isNotEmpty) ...[
-              Container(
-                constraints: BoxConstraints(maxHeight: 200),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: userPlaylists.length,
-                  itemBuilder: (context, index) {
-                    final playlist = userPlaylists[index];
-                    return ListTile(
-                      leading: Icon(Icons.playlist_play, color: Colors.white),
-                      title: Text(
-                        playlist['name'],
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        "${playlist['musicCount']} songs",
-                        style: TextStyle(color: Colors.grey[400]),
-                      ),
-                      onTap: () {
-                        _addToExistingPlaylist(musicId, playlist['_id']);
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
-                ),
-              ),
-              Divider(color: Colors.grey[700]),
-            ],
-            ListTile(
-              leading: Icon(Icons.add, color: Colors.white),
-              title: Text(
-                'Create New Playlist',
-                style: TextStyle(color: Colors.white),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _navigateToCreatePlaylist(musicId);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _addToExistingPlaylist(String musicId, String playlistId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-
-      final response = await http.post(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/music/$musicId/add-to-playlist'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode({
-          'playlistId': playlistId,
-          'userId': userId,
-        }),
-      );
-
-      final responseData = json.decode(response.body);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(responseData['message'] ?? 'Added to playlist'),
-          backgroundColor: response.statusCode == 200 ? Colors.green : Colors.red,
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        _loadUserPlaylists(); // Refresh playlists
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _navigateToCreatePlaylist(String musicId) async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CreatePlaylistPage(initialMusicId: musicId),
-      ),
-    );
-
-    if (result == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Playlist created successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      _loadUserPlaylists(); // Refresh playlists
-    }
   }
 
   Widget _buildWorldTab() {
@@ -600,55 +605,72 @@ class _HomeScreenState extends State<HomeScreen>
     final musics = playlist['musics'] as List<dynamic>? ?? [];
     final owner = playlist['owner'] as Map<String, dynamic>?;
 
-    return Card(
-      color: Colors.grey[900],
-      margin: const EdgeInsets.only(bottom: 16),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[800]!, width: 1),
+      ),
       child: ExpansionTile(
+        tilePadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        childrenPadding: EdgeInsets.only(bottom: 16),
+        iconColor: Colors.white,
+        collapsedIconColor: Colors.white70,
         title: Text(
           playlist['name'] ?? 'Unnamed Playlist',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: 18,
           ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 4),
             if (owner != null)
               Text(
                 'by ${owner['displayName'] ?? owner['username']}',
-                style: const TextStyle(color: Colors.grey),
+                style: const TextStyle(color: Colors.grey, fontSize: 14),
               ),
-            Text(
-              '${playlist['musicCount'] ?? 0} songs • ${playlist['genre'] ?? 'Unknown'}',
-              style: const TextStyle(color: Colors.grey),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Icon(Icons.music_note, color: Colors.grey[400], size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  '${playlist['musicCount'] ?? 0} songs',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.category, color: Colors.grey[400], size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  playlist['genre'] ?? 'Unknown',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ],
             ),
           ],
         ),
         children: [
           if (musics.isNotEmpty)
+            ...musics.map((music) => CommonMusicPlayer(
+              track: music,
+              userId: userId,
+              onLikeChanged: () {
+                _loadWorldPlaylists();
+                _loadHousePlaylists();
+              },
+            )).toList()
+          else
             Container(
-              height: 100,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: musics.length > 4 ? 4 : musics.length,
-                itemBuilder: (context, index) {
-                  final music = musics[index];
-                  return Container(
-                    width: 280,
-                    margin: const EdgeInsets.only(right: 8),
-                    child: _buildSpotifyEmbed(music['spotifyId']),
-                  );
-                },
-              ),
-            ),
-          if (musics.length > 4)
-            Padding(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(20),
               child: Text(
-                '+${musics.length - 4} more songs',
-                style: const TextStyle(color: Colors.grey),
+                'This playlist is empty',
+                style: TextStyle(color: Colors.grey[400]),
+                textAlign: TextAlign.center,
               ),
             ),
         ],
@@ -659,46 +681,80 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildHotPlaylistCard(Map<String, dynamic> hotPlaylist) {
     final musics = hotPlaylist['musics'] as List<dynamic>? ?? [];
 
-    return Card(
-      color: Colors.grey[900],
-      margin: const EdgeInsets.only(bottom: 16),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.withOpacity(0.3), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withOpacity(0.1),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
       child: ExpansionTile(
-        leading: const Icon(Icons.whatshot, color: Colors.orange),
+        tilePadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        childrenPadding: EdgeInsets.only(bottom: 16),
+        iconColor: Colors.orange,
+        collapsedIconColor: Colors.orange.withOpacity(0.7),
+        leading: Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.whatshot, color: Colors.orange, size: 20),
+        ),
         title: Text(
           hotPlaylist['name'] ?? 'Unnamed HOT Playlist',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: 18,
           ),
         ),
-        subtitle: Text(
-          '${hotPlaylist['musicCount'] ?? 0} songs • ${hotPlaylist['category'] ?? 'All Categories'}',
-          style: const TextStyle(color: Colors.grey),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.music_note, color: Colors.grey[400], size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  '${hotPlaylist['musicCount'] ?? 0} songs',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.category, color: Colors.grey[400], size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  hotPlaylist['category'] ?? 'All Categories',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
         ),
         children: [
           if (musics.isNotEmpty)
+            ...musics.map((music) => CommonMusicPlayer(
+              track: music,
+              userId: userId,
+              onLikeChanged: () {
+                _loadHotPlaylists();
+              },
+            )).toList()
+          else
             Container(
-              height: 100,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: musics.length > 4 ? 4 : musics.length,
-                itemBuilder: (context, index) {
-                  final music = musics[index];
-                  return Container(
-                    width: 280,
-                    margin: const EdgeInsets.only(right: 8),
-                    child: _buildSpotifyEmbed(music['spotifyId']),
-                  );
-                },
-              ),
-            ),
-          if (musics.length > 4)
-            Padding(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(20),
               child: Text(
-                '+${musics.length - 4} more songs',
-                style: const TextStyle(color: Colors.grey),
+                'This HOT playlist is empty',
+                style: TextStyle(color: Colors.grey[400]),
+                textAlign: TextAlign.center,
               ),
             ),
         ],
@@ -711,48 +767,44 @@ class _HomeScreenState extends State<HomeScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        automaticallyImplyLeading: false,
         backgroundColor: Colors.black,
         elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu, color: Colors.white, size: 28),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Builder(
-                    builder: (context) => IconButton(
-                      icon: Icon(Icons.menu, color: Colors.white),
-                      onPressed: () => Scaffold.of(context).openDrawer(),
-                    ),
-                  ),
-                  Image.asset(
-                    'assets/your_logo.png',
-                    height: 40,
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.notifications_none, color: Colors.white),
-                    onPressed: () {
-                      // Notification action
-                    },
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.message_outlined, color: Colors.white),
-                    onPressed: () {
-                      // DM action
-                    },
-                  ),
-                ],
-              ),
-            ]),
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'assets/your_logo.png',
+              height: 40,
+              fit: BoxFit.contain,
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.notifications_none, color: Colors.white),
+            onPressed: () {
+              // Notification action
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.message_outlined, color: Colors.white),
+            onPressed: () {
+              // DM action
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.grey,
+          indicatorWeight: 3,
           tabs: const [
             Tab(text: 'Top 10'),
             Tab(text: 'World'),
@@ -761,6 +813,7 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
       ),
+      drawer: _buildDrawer(),
       body: TabBarView(
         controller: _tabController,
         children: [
@@ -771,269 +824,5 @@ class _HomeScreenState extends State<HomeScreen>
         ],
       ),
     );
-  }
-}
-
-class MusicCard extends StatefulWidget {
-  final Map<String, dynamic> track;
-  final int rank;
-  final Function(String) onLike;
-  final Function(String) onAddToPlaylist;
-
-  const MusicCard({
-    required this.track,
-    required this.rank,
-    required this.onLike,
-    required this.onAddToPlaylist,
-    Key? key
-  }) : super(key: key);
-
-  @override
-  _MusicCardState createState() => _MusicCardState();
-}
-
-class _MusicCardState extends State<MusicCard> with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey[850],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[700]!, width: 1),
-      ),
-      child: Column(
-        children: [
-          // Spotify Embed
-          SizedBox(
-            height: 80,
-            child: _buildSpotifyEmbed(widget.track['spotifyId']),
-          ),
-          // Controls and Info
-          Container(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                // Rank Icon
-                _buildRankIcon(widget.rank),
-                const SizedBox(width: 12),
-
-                // Track Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.track['title'] ?? 'Unknown',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.track['artist'] ?? 'Unknown Artist',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 14,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Action Buttons
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Like Button
-                    GestureDetector(
-                      onTap: () => widget.onLike(widget.track['_id']),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[800],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _isLikedByUser(widget.track) ? Icons.favorite : Icons.favorite_border,
-                              color: _isLikedByUser(widget.track) ? Colors.red : Colors.white,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${widget.track['likes'] ?? 0}',
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Add to Playlist Button
-                    GestureDetector(
-                      onTap: () => widget.onAddToPlaylist(widget.track['_id']),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[800],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.playlist_add,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Beatport Button
-                    if (widget.track['beatportUrl']?.isNotEmpty == true)
-                      GestureDetector(
-                        onTap: () => _launchBeatportUrl(widget.track['beatportUrl']),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                              color: Colors.grey[800],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Image.asset(
-                                'assets/beatport_logo.png',
-                                width: 16,
-                                height: 16,
-                              ),
-                              const SizedBox(width: 4),
-                              const Text(
-                                'Buy',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRankIcon(int rank) {
-    Color color;
-    IconData icon;
-
-    switch (rank) {
-      case 1:
-        color = Colors.amber;
-        icon = Icons.emoji_events;
-        break;
-      case 2:
-        color = Colors.grey.shade400;
-        icon = Icons.emoji_events;
-        break;
-      case 3:
-        color = Colors.brown.shade400;
-        icon = Icons.emoji_events;
-        break;
-      default:
-        color = Colors.white;
-        icon = Icons.music_note;
-    }
-
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: rank <= 3 ? color : Colors.grey[800],
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: rank <= 3 ? Colors.white : Colors.grey[600]!,
-          width: 2,
-        ),
-        boxShadow: rank <= 3
-            ? [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ]
-            : null,
-      ),
-      child: rank <= 3
-          ? Icon(icon, color: Colors.white, size: 20)
-          : Center(
-        child: Text(
-          rank.toString(),
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSpotifyEmbed(String? spotifyId) {
-    if (spotifyId == null) return Container();
-
-    final controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.transparent)
-      ..loadRequest(Uri.parse(
-        'https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0',
-      ));
-
-    return SizedBox(
-      height: 80,
-      child: WebViewWidget(
-        controller: controller,
-        gestureRecognizers: Set()
-          ..add(Factory<VerticalDragGestureRecognizer>(
-                () => VerticalDragGestureRecognizer(),
-          )),
-      ),
-    );
-  }
-
-  bool _isLikedByUser(Map<String, dynamic> track) {
-    final userId = (context.findAncestorStateOfType<_HomeScreenState>())?.userId;
-    return track['userLikes']?.contains(userId) ?? false;
-  }
-
-  Future<void> _launchBeatportUrl(String url) async {
-    try {
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.platformDefault);
-      }
-    } catch (e) {
-      print('Error launching URL: $e');
-    }
   }
 }
