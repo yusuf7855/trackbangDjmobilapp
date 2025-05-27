@@ -13,6 +13,7 @@ import './menu/sample_bank_screen.dart';
 import './menu/mostening_screen.dart';
 import './menu/magaza_screen.dart';
 import './menu/biz_kimiz_screen.dart';
+import './world_page.dart'; // Import the new WorldPage
 import './login_page.dart';
 
 // Import the new common music player
@@ -31,14 +32,12 @@ class _HomeScreenState extends State<HomeScreen>
 
   // Data for different tabs
   Map<String, List<dynamic>> top10Data = {};
-  List<dynamic> worldPlaylists = [];
   List<dynamic> housePlaylists = [];
   List<dynamic> hotPlaylists = [];
   List<dynamic> userPlaylists = [];
 
   // Loading states
   bool isLoadingTop10 = true;
-  bool isLoadingWorld = true;
   bool isLoadingHouse = true;
   bool isLoadingHot = true;
 
@@ -61,9 +60,8 @@ class _HomeScreenState extends State<HomeScreen>
       userId = prefs.getString('userId');
     });
 
-    // Load all data
+    // Load all data except World (handled by WorldPage)
     _loadTop10Data();
-    _loadWorldPlaylists();
     _loadHousePlaylists();
     _loadHotPlaylists();
     if (userId != null) {
@@ -115,30 +113,6 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) {
         setState(() {
           isLoadingTop10 = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _loadWorldPlaylists() async {
-    try {
-      final response = await http.get(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists/public-world'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (mounted) {
-          setState(() {
-            worldPlaylists = data['playlists'] ?? [];
-            isLoadingWorld = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          isLoadingWorld = false;
         });
       }
     }
@@ -326,64 +300,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // Rank icon widget with medal colors
-  Widget _buildRankIcon(int rank) {
-    Color color;
-    IconData icon;
-
-    switch (rank) {
-      case 1:
-        color = Colors.amber; // Gold
-        icon = Icons.emoji_events;
-        break;
-      case 2:
-        color = Colors.grey.shade400; // Silver
-        icon = Icons.emoji_events;
-        break;
-      case 3:
-        color = Colors.brown.shade400; // Bronze
-        icon = Icons.emoji_events;
-        break;
-      default:
-        color = Colors.white;
-        icon = Icons.music_note;
-    }
-
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: rank <= 3 ? color : Colors.grey[800],
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: rank <= 3 ? Colors.white : Colors.grey[600]!,
-          width: 2,
-        ),
-        boxShadow: rank <= 3
-            ? [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ]
-            : null,
-      ),
-      child: rank <= 3
-          ? Icon(icon, color: Colors.white, size: 20)
-          : Center(
-        child: Text(
-          rank.toString(),
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildTop10Tab() {
     if (isLoadingTop10) {
       return const Center(child: CircularProgressIndicator());
@@ -400,6 +316,10 @@ class _HomeScreenState extends State<HomeScreen>
 
     return CustomScrollView(
       slivers: [
+        // Add top spacing
+        SliverToBoxAdapter(
+          child: SizedBox(height: 16),
+        ),
         SliverList(
           delegate: SliverChildBuilderDelegate(
                 (context, index) {
@@ -520,24 +440,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // World tab now uses the separate WorldPage
   Widget _buildWorldTab() {
-    if (isLoadingWorld) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return CustomScrollView(
-      slivers: [
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-                (context, index) {
-              final playlist = worldPlaylists[index];
-              return _buildPlaylistCard(playlist);
-            },
-            childCount: worldPlaylists.length,
-          ),
-        ),
-      ],
-    );
+    return WorldPage(userId: userId);
   }
 
   Widget _buildHouseTab() {
@@ -568,6 +473,9 @@ class _HomeScreenState extends State<HomeScreen>
 
     return CustomScrollView(
       slivers: [
+        SliverToBoxAdapter(
+          child: SizedBox(height: 16),
+        ),
         SliverList(
           delegate: SliverChildBuilderDelegate(
                 (context, index) {
@@ -588,6 +496,9 @@ class _HomeScreenState extends State<HomeScreen>
 
     return CustomScrollView(
       slivers: [
+        SliverToBoxAdapter(
+          child: SizedBox(height: 16),
+        ),
         SliverList(
           delegate: SliverChildBuilderDelegate(
                 (context, index) {
@@ -660,7 +571,6 @@ class _HomeScreenState extends State<HomeScreen>
               track: music,
               userId: userId,
               onLikeChanged: () {
-                _loadWorldPlaylists();
                 _loadHousePlaylists();
               },
             )).toList()
@@ -818,7 +728,7 @@ class _HomeScreenState extends State<HomeScreen>
         controller: _tabController,
         children: [
           _buildTop10Tab(),
-          _buildWorldTab(),
+          _buildWorldTab(), // Now uses WorldPage
           _buildHouseTab(),
           _buildHotTab(),
         ],
