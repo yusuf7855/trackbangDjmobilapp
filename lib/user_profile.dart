@@ -402,7 +402,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
                       _buildStatDivider(),
                       _buildStatItem(followingCount, "Takip", Icons.person_add),
                       _buildStatDivider(),
-                      _buildStatItem(playlists.length, "Playlist", Icons.library_music),
+                      _buildStatItem(playlists.length, "Bangs", Icons.library_music),
                     ],
                   ),
                 ),

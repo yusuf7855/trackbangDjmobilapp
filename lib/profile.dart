@@ -650,10 +650,10 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     Row(
                       children: [
                         _buildCompactStat(followerCount, "Takipçi"),
-                        const SizedBox(width: 20),
+                        const SizedBox(width: 50),
                         _buildCompactStat(followingCount, "Takip"),
-                        const SizedBox(width: 20),
-                        _buildCompactStat(playlists.length, "Playlist"),
+                        const SizedBox(width: 50),
+                        _buildCompactStat(playlists.length, "Bangs"),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -674,7 +674,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             ],
           ),
 
-          const SizedBox(height: 24),
+
 
           // Linkler
           if (_profileLinks.isNotEmpty)
@@ -1350,7 +1350,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Linkler (Maksimum 5)",
+          "Linkler",
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,

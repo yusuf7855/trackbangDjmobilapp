@@ -41,6 +41,11 @@ class _HomeScreenState extends State<HomeScreen>
   bool isLoadingHouse = true;
   bool isLoadingHot = true;
 
+  // Cache for preloaded hot playlist music players
+  final Map<String, List<Widget>> _preloadedHotMusicPlayers = {};
+  final Map<String, bool> _hotPlaylistPreloadStatus = {};
+  final Map<String, bool> _hotExpandedStates = {};
+
   @override
   void initState() {
     super.initState();
@@ -158,8 +163,13 @@ class _HomeScreenState extends State<HomeScreen>
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (mounted) {
+          final playlists = data['hots'] ?? [];
+
+          // Preload hot playlist music players
+          await _preloadHotPlaylistMusicPlayers(playlists);
+
           setState(() {
-            hotPlaylists = data['hots'] ?? [];
+            hotPlaylists = playlists;
             isLoadingHot = false;
           });
         }
@@ -170,6 +180,46 @@ class _HomeScreenState extends State<HomeScreen>
           isLoadingHot = false;
         });
       }
+    }
+  }
+
+  Future<void> _preloadHotPlaylistMusicPlayers(List<dynamic> playlists) async {
+    for (final playlist in playlists) {
+      final playlistId = playlist['_id']?.toString();
+      if (playlistId == null) continue;
+
+      // Initialize states
+      _hotExpandedStates[playlistId] = false;
+      _hotPlaylistPreloadStatus[playlistId] = false;
+
+      final musics = playlist['musics'] as List<dynamic>? ?? [];
+      if (musics.isEmpty) {
+        _preloadedHotMusicPlayers[playlistId] = [];
+        _hotPlaylistPreloadStatus[playlistId] = true;
+        continue;
+      }
+
+      // Create CommonMusicPlayer widgets for all tracks
+      final List<Widget> musicPlayers = [];
+
+      for (final music in musics) {
+        final musicPlayer = CommonMusicPlayer(
+          key: ValueKey('hot_${playlistId}_${music['_id'] ?? music['spotifyId']}'),
+          track: music,
+          userId: userId,
+          onLikeChanged: () {
+            _loadHotPlaylists();
+          },
+        );
+        musicPlayers.add(musicPlayer);
+      }
+
+      _preloadedHotMusicPlayers[playlistId] = musicPlayers;
+      _hotPlaylistPreloadStatus[playlistId] = true;
+    }
+
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -184,24 +234,10 @@ class _HomeScreenState extends State<HomeScreen>
             decoration: BoxDecoration(
               color: Colors.grey[900],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Image.asset(
-                  'assets/your_logo.png',
-                  height: 60,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'DJ Mobile App',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+            child: Image.asset(
+              'assets/your_logo.png',
+              height: 60,
+              fit: BoxFit.contain,
             ),
           ),
           _buildDrawerItem(
@@ -589,7 +625,11 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildHotPlaylistCard(Map<String, dynamic> hotPlaylist) {
+    final playlistId = hotPlaylist['_id']?.toString() ?? '';
     final musics = hotPlaylist['musics'] as List<dynamic>? ?? [];
+    final isExpanded = _hotExpandedStates[playlistId] ?? false;
+    final isPreloaded = _hotPlaylistPreloadStatus[playlistId] ?? false;
+    final preloadedPlayers = _preloadedHotMusicPlayers[playlistId] ?? [];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -606,10 +646,17 @@ class _HomeScreenState extends State<HomeScreen>
         ],
       ),
       child: ExpansionTile(
+        key: ValueKey(playlistId),
         tilePadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         childrenPadding: EdgeInsets.only(bottom: 16),
         iconColor: Colors.orange,
         collapsedIconColor: Colors.orange.withOpacity(0.7),
+        initiallyExpanded: isExpanded,
+        onExpansionChanged: (expanded) {
+          setState(() {
+            _hotExpandedStates[playlistId] = expanded;
+          });
+        },
         leading: Container(
           padding: EdgeInsets.all(8),
           decoration: BoxDecoration(
@@ -618,13 +665,41 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           child: Icon(Icons.whatshot, color: Colors.orange, size: 20),
         ),
-        title: Text(
-          hotPlaylist['name'] ?? 'Unnamed HOT Playlist',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                hotPlaylist['name'] ?? 'Unnamed HOT Playlist',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            // Show loading indicator if not preloaded
+            if (!isPreloaded)
+              Container(
+                margin: EdgeInsets.only(left: 8),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                  ),
+                ),
+              )
+            else
+              Container(
+                margin: EdgeInsets.only(left: 8),
+                child: Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 16,
+                ),
+              ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -635,7 +710,7 @@ class _HomeScreenState extends State<HomeScreen>
                 Icon(Icons.music_note, color: Colors.grey[400], size: 16),
                 const SizedBox(width: 4),
                 Text(
-                  '${hotPlaylist['musicCount'] ?? 0} songs',
+                  '${hotPlaylist['musicCount'] ?? musics.length} songs',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
                 const SizedBox(width: 12),
@@ -645,28 +720,51 @@ class _HomeScreenState extends State<HomeScreen>
                   hotPlaylist['category'] ?? 'All Categories',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
+                const SizedBox(width: 12),
+                Text(
+                  isPreloaded ? 'Ready' : 'Loading...',
+                  style: TextStyle(
+                    color: isPreloaded ? Colors.green : Colors.orange,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ],
         ),
         children: [
-          if (musics.isNotEmpty)
-            ...musics.map((music) => CommonMusicPlayer(
-              track: music,
-              userId: userId,
-              onLikeChanged: () {
-                _loadHotPlaylists();
-              },
-            )).toList()
-          else
-            Container(
-              padding: EdgeInsets.all(20),
-              child: Text(
-                'This HOT playlist is empty',
-                style: TextStyle(color: Colors.grey[400]),
-                textAlign: TextAlign.center,
-              ),
-            ),
+          if (isExpanded) ...[
+            if (isPreloaded && preloadedPlayers.isNotEmpty)
+            // Show preloaded music players instantly
+              ...preloadedPlayers
+            else if (!isPreloaded)
+            // Show loading state
+              Container(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'Loading ${musics.length} HOT tracks...',
+                      style: TextStyle(color: Colors.grey[400]),
+                    ),
+                  ],
+                ),
+              )
+            else if (musics.isEmpty)
+                Container(
+                  padding: EdgeInsets.all(20),
+                  child: Text(
+                    'This HOT playlist is empty',
+                    style: TextStyle(color: Colors.grey[400]),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+          ],
         ],
       ),
     );

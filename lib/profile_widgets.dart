@@ -351,7 +351,7 @@ class ProfileWidgets {
       children: [
         _buildStatColumn(profileState.followerCount, "Takipçi"),
         _buildStatColumn(profileState.followingCount, "Takip"),
-        _buildStatColumn(profileState.playlists.length, "Playlist"),
+        _buildStatColumn(profileState.playlists.length, "Bangs"),
       ],
     );
   }
