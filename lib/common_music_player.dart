@@ -11,12 +11,16 @@ class CommonMusicPlayer extends StatefulWidget {
   final Map<String, dynamic> track;
   final String? userId;
   final VoidCallback? onLikeChanged;
+  final Function(String)? onWebViewLoaded; // WebView yüklenme callback'i
+  final String? webViewKey; // WebView tracking için
 
   const CommonMusicPlayer({
     Key? key,
     required this.track,
     this.userId,
     this.onLikeChanged,
+    this.onWebViewLoaded,
+    this.webViewKey,
   }) : super(key: key);
 
   @override
@@ -27,6 +31,7 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
   late WebViewController _webViewController;
   bool _isWebViewInitialized = false;
   List<Map<String, dynamic>> userPlaylists = [];
+  String? _currentSpotifyId; // Mevcut yüklenen Spotify ID'sini takip et
 
   @override
   bool get wantKeepAlive => true;
@@ -40,14 +45,86 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
     }
   }
 
+  @override
+  void didUpdateWidget(CommonMusicPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Eğer spotify ID değiştiyse WebView'ı yeniden yükle
+    final newSpotifyId = widget.track['spotifyId']?.toString();
+    if (newSpotifyId != _currentSpotifyId) {
+      print('CommonMusicPlayer: Spotify ID changed from $_currentSpotifyId to $newSpotifyId - Reloading WebView');
+      _initializeWebView();
+    }
+  }
+
   void _initializeWebView() {
     final spotifyId = widget.track['spotifyId']?.toString();
     if (spotifyId != null && spotifyId.isNotEmpty) {
+      _currentSpotifyId = spotifyId;
+
       _webViewController = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setBackgroundColor(Colors.transparent)
+        ..setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1')
+        ..enableZoom(false)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageStarted: (url) {
+              print('CommonMusicPlayer WebView started loading: $url');
+            },
+            onPageFinished: (url) {
+              print('CommonMusicPlayer WebView loaded: $url');
+
+              // JavaScript ile Spotify iframe'i optimize et
+              _webViewController.runJavaScript('''
+                document.addEventListener('DOMContentLoaded', function() {
+                  var style = document.createElement('style');
+                  style.innerHTML = `
+                    * { 
+                      -webkit-transform: translateZ(0); 
+                      transform: translateZ(0);
+                    }
+                    body { 
+                      overflow: hidden; 
+                      margin: 0; 
+                      padding: 0;
+                      background: transparent !important;
+                    }
+                    iframe {
+                      border: none !important;
+                      background: transparent !important;
+                    }
+                  `;
+                  document.head.appendChild(style);
+                });
+              ''');
+
+              // WebView yüklendiğinde callback'i çağır
+              if (widget.webViewKey != null && widget.onWebViewLoaded != null) {
+                widget.onWebViewLoaded!(widget.webViewKey!);
+              }
+            },
+            onWebResourceError: (error) {
+              print('CommonMusicPlayer WebView error: ${error.description}');
+              // Hata durumunda da callback'i çağır
+              if (widget.webViewKey != null && widget.onWebViewLoaded != null) {
+                widget.onWebViewLoaded!(widget.webViewKey!);
+              }
+            },
+            // Sadece Spotify URL'lerini kabul et
+            onNavigationRequest: (request) {
+              if (request.url.contains('spotify.com') ||
+                  request.url.contains('scdn.co') ||
+                  request.url.contains('spotilocal.com')) {
+                return NavigationDecision.navigate;
+              }
+              return NavigationDecision.prevent;
+            },
+          ),
+        )
+      // Optimize edilmiş Spotify embed URL
         ..loadRequest(Uri.parse(
-          'https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0',
+          'https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0&view=compact&show-cover=0',
         ));
 
       setState(() {
@@ -314,7 +391,11 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
   Widget build(BuildContext context) {
     super.build(context);
 
+    // Benzersiz key - WebView'ın doğru şarkıyla eşleşmesini sağlar
+    final uniqueKey = '${widget.track['_id']}_${widget.track['spotifyId']}';
+
     return Container(
+      key: ValueKey(uniqueKey), // Container için benzersiz key
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.grey[900],
@@ -331,6 +412,7 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
         children: [
           // Spotify Embed Section
           Container(
+            key: ValueKey('webview_$uniqueKey'), // WebView container için de benzersiz key
             height: 80,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.only(
