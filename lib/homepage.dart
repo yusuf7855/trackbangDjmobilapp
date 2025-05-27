@@ -13,10 +13,8 @@ import './menu/sample_bank_screen.dart';
 import './menu/mostening_screen.dart';
 import './menu/magaza_screen.dart';
 import './menu/biz_kimiz_screen.dart';
-import './world_page.dart'; // Import the new WorldPage
+import './world_page.dart';
 import './login_page.dart';
-
-// Import the new common music player
 import './common_music_player.dart';
 import './top10_music_card.dart';
 
@@ -26,7 +24,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
   String? userId;
 
@@ -41,22 +39,53 @@ class _HomeScreenState extends State<HomeScreen>
   bool isLoadingHouse = true;
   bool isLoadingHot = true;
 
-  // Cache for preloaded hot playlist music players
+  // Preloading management for Top10
+  final Map<String, bool> _top10WebViewLoadedStatus = {};
+  final Set<String> _allTop10TrackIds = {};
+  bool _allTop10WebViewsLoaded = false;
+
+  // Preloading management for Hot playlists
   final Map<String, List<Widget>> _preloadedHotMusicPlayers = {};
   final Map<String, bool> _hotPlaylistPreloadStatus = {};
   final Map<String, bool> _hotExpandedStates = {};
+
+  // Animation controller for loading
+  late AnimationController _loadingAnimationController;
+  late Animation<double> _scaleAnimation;
+  late Animation<Color?> _colorAnimation;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _initializeLoadingAnimation();
     _initializeUser();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _loadingAnimationController.dispose();
     super.dispose();
+  }
+
+  void _initializeLoadingAnimation() {
+    _loadingAnimationController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+
+    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.15).animate(
+      CurvedAnimation(
+        parent: _loadingAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _colorAnimation = ColorTween(
+      begin: Colors.white.withOpacity(0.8),
+      end: Colors.white,
+    ).animate(_loadingAnimationController);
   }
 
   Future<void> _initializeUser() async {
@@ -65,10 +94,13 @@ class _HomeScreenState extends State<HomeScreen>
       userId = prefs.getString('userId');
     });
 
-    // Load all data except World (handled by WorldPage)
-    _loadTop10Data();
-    _loadHousePlaylists();
-    _loadHotPlaylists();
+    // Load all data
+    await Future.wait([
+      _loadTop10Data(),
+      _loadHousePlaylists(),
+      _loadHotPlaylists(),
+    ]);
+
     if (userId != null) {
       _loadUserPlaylists();
     }
@@ -108,10 +140,26 @@ class _HomeScreenState extends State<HomeScreen>
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (mounted) {
-          setState(() {
-            top10Data = Map<String, List<dynamic>>.from(data['top10']);
-            isLoadingTop10 = false;
+          final top10Map = Map<String, List<dynamic>>.from(data['top10']);
+
+          // Collect all track IDs for preloading
+          final allTrackIds = <String>{};
+          top10Map.values.forEach((tracks) {
+            tracks.forEach((track) {
+              final trackId = track['_id']?.toString();
+              if (trackId != null) {
+                allTrackIds.add(trackId);
+              }
+            });
           });
+
+          setState(() {
+            top10Data = top10Map;
+            _allTop10TrackIds.addAll(allTrackIds);
+          });
+
+          // Start preloading WebViews
+          await _preloadTop10WebViews();
         }
       }
     } catch (e) {
@@ -119,6 +167,52 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {
           isLoadingTop10 = false;
         });
+      }
+    }
+  }
+
+  Future<void> _preloadTop10WebViews() async {
+    print('Starting to preload ${_allTop10TrackIds.length} Top10 WebViews');
+
+    // Initialize loading status for all tracks
+    for (final trackId in _allTop10TrackIds) {
+      _top10WebViewLoadedStatus[trackId] = false;
+    }
+
+    // Gerçek yükleme süresini bekle - daha uzun süre
+    await Future.delayed(Duration(seconds: 5));
+
+    if (mounted) {
+      setState(() {
+        isLoadingTop10 = false;
+        _allTop10WebViewsLoaded = true;
+      });
+    }
+
+    _loadingAnimationController.stop();
+  }
+
+  void _onTop10WebViewLoaded(String trackId) {
+    print('Top10 WebView loaded for track: $trackId');
+
+    if (mounted) {
+      setState(() {
+        _top10WebViewLoadedStatus[trackId] = true;
+      });
+
+      // Check if all WebViews are loaded
+      final loadedCount = _top10WebViewLoadedStatus.values.where((loaded) => loaded).length;
+      final totalCount = _allTop10TrackIds.length;
+
+      print('Top10 WebViews loaded: $loadedCount/$totalCount');
+
+      if (loadedCount >= totalCount && !_allTop10WebViewsLoaded) {
+        setState(() {
+          isLoadingTop10 = false;
+          _allTop10WebViewsLoaded = true;
+        });
+        _loadingAnimationController.stop();
+        print('All Top10 WebViews loaded!');
       }
     }
   }
@@ -184,6 +278,8 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _preloadHotPlaylistMusicPlayers(List<dynamic> playlists) async {
+    print('Preloading ${playlists.length} HOT playlists');
+
     for (final playlist in playlists) {
       final playlistId = playlist['_id']?.toString();
       if (playlistId == null) continue;
@@ -199,7 +295,7 @@ class _HomeScreenState extends State<HomeScreen>
         continue;
       }
 
-      // Create CommonMusicPlayer widgets for all tracks
+      // Create CommonMusicPlayer widgets for all tracks with PRELOADING ENABLED
       final List<Widget> musicPlayers = [];
 
       for (final music in musics) {
@@ -207,6 +303,8 @@ class _HomeScreenState extends State<HomeScreen>
           key: ValueKey('hot_${playlistId}_${music['_id'] ?? music['spotifyId']}'),
           track: music,
           userId: userId,
+          preloadWebView: true, // PRELOADING AKTİF
+          lazyLoad: false, // LAZY LOADING KAPALI - dropout açıldığında hazır olsun
           onLikeChanged: () {
             _loadHotPlaylists();
           },
@@ -216,11 +314,65 @@ class _HomeScreenState extends State<HomeScreen>
 
       _preloadedHotMusicPlayers[playlistId] = musicPlayers;
       _hotPlaylistPreloadStatus[playlistId] = true;
+
+      print('Preloaded ${musics.length} tracks for HOT playlist: ${playlist['name']}');
     }
 
     if (mounted) {
       setState(() {});
     }
+  }
+
+  // Loading animation widget
+  Widget _buildLoadingAnimation() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _loadingAnimationController,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _scaleAnimation.value,
+                child: Text(
+                  'B',
+                  style: TextStyle(
+                    color: _colorAnimation.value,
+                    fontSize: 96,
+                    fontWeight: FontWeight.bold,
+                    fontStyle: FontStyle.italic,
+                    shadows: [
+                      Shadow(
+                        color: Colors.white.withOpacity(0.7),
+                        blurRadius: 15,
+                        offset: Offset(0, 0),
+                      )
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          SizedBox(height: 30),
+          Text(
+            'İçerikler Yükleniyor...',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 18,
+              letterSpacing: 1.5,
+            ),
+          ),
+          SizedBox(height: 20),
+          Text(
+            'Spotify player\'lar hazırlanıyor',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // Drawer builder
@@ -337,8 +489,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildTop10Tab() {
-    if (isLoadingTop10) {
-      return const Center(child: CircularProgressIndicator());
+    // Show loading animation if still loading
+    if (isLoadingTop10 || !_allTop10WebViewsLoaded) {
+      return _buildLoadingAnimation();
     }
 
     final categories = [
@@ -352,7 +505,6 @@ class _HomeScreenState extends State<HomeScreen>
 
     return CustomScrollView(
       slivers: [
-        // Add top spacing
         SliverToBoxAdapter(
           child: SizedBox(height: 16),
         ),
@@ -458,16 +610,21 @@ class _HomeScreenState extends State<HomeScreen>
 
           const SizedBox(height: 16),
 
-          // Top 10 Music Cards
+          // Top 10 Music Cards with preloading
           ...tracks.asMap().entries.map((entry) {
             final index = entry.key;
             final track = entry.value;
+            final trackId = track['_id']?.toString() ?? '';
+
             return Top10MusicCard(
               track: track,
               rank: index + 1,
               userId: userId,
+              webViewKey: trackId,
+              onWebViewLoaded: _onTop10WebViewLoaded,
+              preloadWebView: true, // Enable preloading
               onLikeChanged: () {
-                _loadTop10Data(); // Refresh data when like changes
+                _loadTop10Data();
               },
             );
           }).toList(),
@@ -476,14 +633,14 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // World tab now uses the separate WorldPage
+  // World tab uses the separate WorldPage
   Widget _buildWorldTab() {
     return WorldPage(userId: userId);
   }
 
   Widget _buildHouseTab() {
     if (isLoadingHouse) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildLoadingAnimation();
     }
 
     if (housePlaylists.isEmpty) {
@@ -527,7 +684,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildHotTab() {
     if (isLoadingHot) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildLoadingAnimation();
     }
 
     return CustomScrollView(
@@ -606,6 +763,8 @@ class _HomeScreenState extends State<HomeScreen>
             ...musics.map((music) => CommonMusicPlayer(
               track: music,
               userId: userId,
+              preloadWebView: true, // PRELOADING AKTİF
+              lazyLoad: false, // LAZY LOADING KAPALI
               onLikeChanged: () {
                 _loadHousePlaylists();
               },
@@ -665,41 +824,13 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           child: Icon(Icons.whatshot, color: Colors.orange, size: 20),
         ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                hotPlaylist['name'] ?? 'Unnamed HOT Playlist',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-            // Show loading indicator if not preloaded
-            if (!isPreloaded)
-              Container(
-                margin: EdgeInsets.only(left: 8),
-                child: SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                  ),
-                ),
-              )
-            else
-              Container(
-                margin: EdgeInsets.only(left: 8),
-                child: Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
-                  size: 16,
-                ),
-              ),
-          ],
+        title: Text(
+          hotPlaylist['name'] ?? 'Unnamed HOT Playlist',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -720,15 +851,6 @@ class _HomeScreenState extends State<HomeScreen>
                   hotPlaylist['category'] ?? 'All Categories',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  isPreloaded ? 'Ready' : 'Loading...',
-                  style: TextStyle(
-                    color: isPreloaded ? Colors.green : Colors.orange,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
               ],
             ),
           ],
@@ -736,34 +858,17 @@ class _HomeScreenState extends State<HomeScreen>
         children: [
           if (isExpanded) ...[
             if (isPreloaded && preloadedPlayers.isNotEmpty)
-            // Show preloaded music players instantly
+            // Preload edilmiş player'ları anında göster - tekrar yükleme yok
               ...preloadedPlayers
-            else if (!isPreloaded)
-            // Show loading state
+            else if (musics.isEmpty)
               Container(
                 padding: EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'Loading ${musics.length} HOT tracks...',
-                      style: TextStyle(color: Colors.grey[400]),
-                    ),
-                  ],
+                child: Text(
+                  'This HOT playlist is empty',
+                  style: TextStyle(color: Colors.grey[400]),
+                  textAlign: TextAlign.center,
                 ),
-              )
-            else if (musics.isEmpty)
-                Container(
-                  padding: EdgeInsets.all(20),
-                  child: Text(
-                    'This HOT playlist is empty',
-                    style: TextStyle(color: Colors.grey[400]),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+              ),
           ],
         ],
       ),
@@ -826,7 +931,7 @@ class _HomeScreenState extends State<HomeScreen>
         controller: _tabController,
         children: [
           _buildTop10Tab(),
-          _buildWorldTab(), // Now uses WorldPage
+          _buildWorldTab(),
           _buildHouseTab(),
           _buildHotTab(),
         ],
