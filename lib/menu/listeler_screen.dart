@@ -40,7 +40,7 @@ class ListelerScreen extends StatelessWidget {
               context,
               buttonHeight,
               'assets/afra.jpeg',
-              'afrahouse',
+              'afrohouse', // DÜZELTİLDİ: afrahouse -> afrohouse
               'Afro House',
             ),
             SizedBox(height: 20),
@@ -95,6 +95,8 @@ class ListelerScreen extends StatelessWidget {
         cursor: SystemMouseCursors.click,
         child: ElevatedButton(
           onPressed: () {
+            // Debug: Kategori adını logla
+            print('Navigating to category: $category'); // Debug log
             Navigator.push(
               context,
               MaterialPageRoute(

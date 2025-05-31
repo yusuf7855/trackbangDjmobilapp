@@ -16,12 +16,18 @@ class CategoryPage extends StatefulWidget {
 }
 
 class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMixin {
-  List<Map<String, dynamic>> musicList = [];
-  bool isLoading = true;
+  // Admin playlists data
+  List<Map<String, dynamic>> adminPlaylists = [];
+  Map<String, dynamic>? selectedPlaylist;
+  List<Map<String, dynamic>> selectedPlaylistMusics = [];
+
+  bool isLoadingPlaylists = true;
+  bool isLoadingMusics = false;
+  bool isExpanded = false;
   String? userId;
 
-  // Loading animation
-  late AnimationController _animationController;
+  // Animation controllers
+  late AnimationController _loadingAnimationController;
   late Animation<double> _scaleAnimation;
   late Animation<Color?> _colorAnimation;
 
@@ -34,25 +40,26 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    _initializeAnimation();
+    _initializeAnimations();
     _initializeUser();
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _loadingAnimationController.dispose();
     super.dispose();
   }
 
-  void _initializeAnimation() {
-    _animationController = AnimationController(
+  void _initializeAnimations() {
+    // Loading animation
+    _loadingAnimationController = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
     _scaleAnimation = Tween<double>(begin: 0.95, end: 1.15).animate(
       CurvedAnimation(
-        parent: _animationController,
+        parent: _loadingAnimationController,
         curve: Curves.easeInOut,
       ),
     );
@@ -60,7 +67,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
     _colorAnimation = ColorTween(
       begin: Colors.white.withOpacity(0.8),
       end: Colors.white,
-    ).animate(_animationController);
+    ).animate(_loadingAnimationController);
   }
 
   Future<void> _initializeUser() async {
@@ -69,54 +76,45 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
       userId = prefs.getString('userId');
     });
 
-    // Fetch music data and preload
-    await _fetchCategoryMusic();
+    await _fetchAdminPlaylists();
   }
 
-  Future<void> _fetchCategoryMusic() async {
+  Future<void> _fetchAdminPlaylists() async {
     try {
-      print('CategoryPage: Fetching music for category: ${widget.category}');
+      final apiUrl = '${UrlConstants.apiBaseUrl}/api/playlists/category/${widget.category}';
+      print('CategoryPage: Fetching admin playlists for category: ${widget.category}');
+      print('CategoryPage: API URL: $apiUrl');
 
-      final response = await http.get(Uri.parse('${UrlConstants.apiBaseUrl}/api/music'));
+      final response = await http.get(Uri.parse(apiUrl));
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final data = json.decode(response.body);
 
-        final filteredMusic = data
-            .where((item) => item['category'].toLowerCase() == widget.category.toLowerCase())
-            .map((item) => ({
-          'id': item['spotifyId'],
-          'title': item['title'],
-          'artist': item['artist'],
-          'likes': item['likes'] ?? 0,
-          '_id': item['_id'],
-          'userLikes': item['userLikes'] ?? [],
-          'beatportUrl': item['beatportUrl'] ?? '',
-          'spotifyId': item['spotifyId'],
-          'category': item['category'],
-        }))
-            .toList();
+        if (mounted && data['success'] == true) {
+          final playlists = List<Map<String, dynamic>>.from(data['playlists'] ?? []);
 
-        if (mounted) {
           setState(() {
-            musicList = filteredMusic;
+            adminPlaylists = playlists;
+            isLoadingPlaylists = false;
           });
 
-          // Start preloading music players
-          await _preloadMusicPlayers();
+          // Auto-select first playlist if available
+          if (playlists.isNotEmpty) {
+            await _selectPlaylist(playlists.first);
+          }
         }
       } else {
-        throw Exception('Failed to load music');
+        throw Exception('Failed to load admin playlists');
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          isLoading = false;
+          isLoadingPlaylists = false;
         });
-        _animationController.stop();
+        _loadingAnimationController.stop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${widget.title} müzikleri yüklenirken hata: $e'),
+            content: Text('${widget.title} playlist\'leri yüklenirken hata: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -124,53 +122,76 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
     }
   }
 
-  Future<void> _preloadMusicPlayers() async {
-    if (musicList.isEmpty) {
+  Future<void> _selectPlaylist(Map<String, dynamic> playlist) async {
+    setState(() {
+      selectedPlaylist = playlist;
+      isLoadingMusics = true;
+      selectedPlaylistMusics = [];
+      _musicPlayerLoadStatus.clear();
+      _preloadedMusicPlayers.clear();
+      _loadedPlayerCount = 0;
+      _allMusicPlayersLoaded = false;
+      isExpanded = true;
+    });
+
+    _loadingAnimationController.repeat(reverse: true);
+
+    // Extract musics from selected playlist
+    final musics = List<Map<String, dynamic>>.from(playlist['musics'] ?? []);
+
+    setState(() {
+      selectedPlaylistMusics = musics;
+    });
+
+    if (musics.isNotEmpty) {
+      await _preloadMusicPlayers(musics);
+    } else {
       setState(() {
-        isLoading = false;
+        isLoadingMusics = false;
         _allMusicPlayersLoaded = true;
       });
-      _animationController.stop();
-      return;
+      _loadingAnimationController.stop();
     }
+  }
 
-    print('CategoryPage: Preloading ${musicList.length} music players for ${widget.title}');
+  Future<void> _preloadMusicPlayers(List<Map<String, dynamic>> musics) async {
+    print('CategoryPage: Preloading ${musics.length} music players for playlist: ${selectedPlaylist?['name']}');
 
     // Initialize loading status for all tracks
-    for (final track in musicList) {
+    for (final track in musics) {
       final trackId = track['_id']?.toString() ?? '';
       _musicPlayerLoadStatus[trackId] = false;
     }
 
     // Create preloaded music players
-    for (int i = 0; i < musicList.length; i++) {
-      final track = musicList[i];
+    for (int i = 0; i < musics.length; i++) {
+      final track = musics[i];
       final trackId = track['_id']?.toString() ?? '';
 
       final musicPlayer = CommonMusicPlayer(
-        key: ValueKey('category_${widget.category}_${trackId}_$i'),
+        key: ValueKey('category_${widget.category}_${selectedPlaylist?['_id']}_${trackId}_$i'),
         track: track,
         userId: userId,
-        preloadWebView: true, // Enable preloading
-        lazyLoad: false, // Disable lazy loading for instant display
+        preloadWebView: true,
+        lazyLoad: false,
         webViewKey: trackId,
         onWebViewLoaded: _onMusicPlayerLoaded,
-        onLikeChanged: _refreshData,
+        onLikeChanged: _refreshSelectedPlaylist,
       );
 
       _preloadedMusicPlayers[trackId] = musicPlayer;
     }
 
-    // Simulate realistic loading time - adjust based on your needs
-    await Future.delayed(Duration(seconds: 3));
+    // Simulate realistic loading time
+    await Future.delayed(Duration(seconds: 2));
 
     if (mounted) {
       setState(() {
-        isLoading = false;
+        isLoadingMusics = false;
         _allMusicPlayersLoaded = true;
       });
-      _animationController.stop();
-      print('CategoryPage: All music players preloaded for ${widget.title}');
+      _loadingAnimationController.stop();
+      print('CategoryPage: All music players preloaded for playlist: ${selectedPlaylist?['name']}');
     }
   }
 
@@ -181,33 +202,21 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
         _loadedPlayerCount++;
       });
 
-      print('CategoryPage: Music player loaded ($trackId) - ${_loadedPlayerCount}/${musicList.length}');
-
       // Check if all players are loaded
-      if (_loadedPlayerCount >= musicList.length && !_allMusicPlayersLoaded) {
+      if (_loadedPlayerCount >= selectedPlaylistMusics.length && !_allMusicPlayersLoaded) {
         setState(() {
-          isLoading = false;
+          isLoadingMusics = false;
           _allMusicPlayersLoaded = true;
         });
-        _animationController.stop();
-        print('CategoryPage: All music players loaded for ${widget.title}!');
+        _loadingAnimationController.stop();
       }
     }
   }
 
-  void _refreshData() {
-    // Reset loading states
-    _musicPlayerLoadStatus.clear();
-    _preloadedMusicPlayers.clear();
-    _loadedPlayerCount = 0;
-    _allMusicPlayersLoaded = false;
-
-    setState(() {
-      isLoading = true;
-    });
-
-    _animationController.repeat(reverse: true);
-    _fetchCategoryMusic();
+  void _refreshSelectedPlaylist() {
+    if (selectedPlaylist != null) {
+      _selectPlaylist(selectedPlaylist!);
+    }
   }
 
   Widget _buildLoadingAnimation() {
@@ -216,7 +225,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           AnimatedBuilder(
-            animation: _animationController,
+            animation: _loadingAnimationController,
             builder: (context, child) {
               return Transform.scale(
                 scale: _scaleAnimation.value,
@@ -241,7 +250,9 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
           ),
           SizedBox(height: 30),
           Text(
-            '${widget.title} Yükleniyor...',
+            isLoadingPlaylists
+                ? '${widget.title} Playlist\'leri Yükleniyor...'
+                : 'Şarkılar Hazırlanıyor...',
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 18,
@@ -250,50 +261,42 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
           ),
           SizedBox(height: 20),
           Text(
-            'Spotify player\'lar hazırlanıyor',
+            isLoadingPlaylists
+                ? 'Admin playlist\'leri getiriliyor'
+                : 'Spotify player\'lar hazırlanıyor',
             style: TextStyle(
               color: Colors.white.withOpacity(0.6),
               fontSize: 14,
             ),
           ),
-          SizedBox(height: 30),
-          // Progress indicator
-          if (_loadedPlayerCount > 0 && musicList.isNotEmpty)
-            Column(
-              children: [
-                LinearProgressIndicator(
-                  value: _loadedPlayerCount / musicList.length,
-                  backgroundColor: Colors.grey[800],
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-                SizedBox(height: 12),
-                Text(
-                  '${_loadedPlayerCount}/${musicList.length} müzik hazır',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+          if (!isLoadingPlaylists && _loadedPlayerCount > 0 && selectedPlaylistMusics.isNotEmpty) ...[
+            SizedBox(height: 30),
+            LinearProgressIndicator(
+              value: _loadedPlayerCount / selectedPlaylistMusics.length,
+              backgroundColor: Colors.grey[800],
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
             ),
+            SizedBox(height: 12),
+            Text(
+              '${_loadedPlayerCount}/${selectedPlaylistMusics.length} şarkı hazır',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 12,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildPlaylistContainer() {
+    if (adminPlaylists.isEmpty) return SizedBox.shrink();
+
     return Container(
       margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.grey[850]!,
-            Colors.grey[900]!,
-          ],
-        ),
+        color: Colors.grey[900],
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey[700]!, width: 1),
         boxShadow: [
@@ -304,67 +307,276 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            padding: EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blue, Colors.purple],
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
-                ),
-              ],
+          // Dropdown Header
+          InkWell(
+            onTap: () {
+              _showPlaylistDropdown();
+            },
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+              bottomLeft: isExpanded ? Radius.zero : Radius.circular(16),
+              bottomRight: isExpanded ? Radius.zero : Radius.circular(16),
             ),
-            child: Icon(Icons.library_music, color: Colors.white, size: 28),
-          ),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Row(
+                children: [
+                  if (selectedPlaylist != null) ...[
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.orange, Colors.red],
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        selectedPlaylist!['subCategory']?.toString() ?? '',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            selectedPlaylist!['name']?.toString() ?? 'Unnamed',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            '${selectedPlaylist!['musicCount'] ?? 0} tracks',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    Expanded(
+                      child: Text(
+                        'Playlist Seçin',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: Duration(milliseconds: 300),
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Curated ${widget.category} tracks',
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.blue.withOpacity(0.3)),
-            ),
-            child: Text(
-              '${musicList.length} TRACKS',
-              style: TextStyle(
-                color: Colors.blue,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+                ],
               ),
             ),
           ),
+
+          // Music List (with simple show/hide instead of complex animation)
+          if (selectedPlaylist != null && isExpanded) ...[
+            Divider(color: Colors.grey[700], height: 1),
+            Container(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  if (isLoadingMusics || !_allMusicPlayersLoaded) ...[
+                    Container(
+                      height: 200,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'Şarkılar yükleniyor...',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 14,
+                              ),
+                            ),
+                            if (_loadedPlayerCount > 0 && selectedPlaylistMusics.isNotEmpty) ...[
+                              SizedBox(height: 12),
+                              Text(
+                                '${_loadedPlayerCount}/${selectedPlaylistMusics.length} hazır',
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ] else if (selectedPlaylistMusics.isEmpty) ...[
+                    Container(
+                      height: 100,
+                      child: Center(
+                        child: Text(
+                          'Bu playlist\'te şarkı bulunamadı',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    ...selectedPlaylistMusics.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final track = entry.value;
+                      final trackId = track['_id']?.toString() ?? '';
+
+                      Widget musicPlayer;
+                      if (_preloadedMusicPlayers.containsKey(trackId)) {
+                        musicPlayer = _preloadedMusicPlayers[trackId]!;
+                      } else {
+                        musicPlayer = CommonMusicPlayer(
+                          track: track,
+                          userId: userId,
+                          onLikeChanged: _refreshSelectedPlaylist,
+                        );
+                      }
+
+                      return Container(
+                        margin: EdgeInsets.only(bottom: index < selectedPlaylistMusics.length - 1 ? 16 : 0),
+                        child: musicPlayer,
+                      );
+                    }).toList(),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _showPlaylistDropdown() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Text(
+                    'Playlist Seçin',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              constraints: BoxConstraints(maxHeight: 400),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: adminPlaylists.length,
+                itemBuilder: (context, index) {
+                  final playlist = adminPlaylists[index];
+                  final subCategory = playlist['subCategory']?.toString() ?? '';
+                  final name = playlist['name']?.toString() ?? 'Unnamed';
+                  final musicCount = playlist['musicCount'] ?? 0;
+                  final isSelected = selectedPlaylist?['_id'] == playlist['_id'];
+
+                  return Container(
+                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue.withOpacity(0.2) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      border: isSelected ? Border.all(color: Colors.blue, width: 1) : null,
+                    ),
+                    child: ListTile(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _selectPlaylist(playlist);
+                      },
+                      leading: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.orange, Colors.red],
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          subCategory,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        name,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '$musicCount tracks',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle, color: Colors.blue)
+                          : Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 16),
+                    ),
+                  );
+                },
+              ),
+            ),
+            SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
@@ -390,21 +602,21 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
         automaticallyImplyLeading: true,
       ),
       backgroundColor: Colors.black,
-      body: isLoading || !_allMusicPlayersLoaded
+      body: isLoadingPlaylists
           ? _buildLoadingAnimation()
-          : musicList.isEmpty
+          : adminPlaylists.isEmpty
           ? Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.music_off,
+              Icons.playlist_remove,
               size: 64,
               color: Colors.grey[600],
             ),
             const SizedBox(height: 16),
             Text(
-              '${widget.title} kategorisinde şarkı bulunamadı',
+              '${widget.title} kategorisinde admin playlist bulunamadı',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -413,7 +625,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: _refreshData,
+              onPressed: _fetchAdminPlaylists,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
@@ -426,52 +638,18 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
       )
           : RefreshIndicator(
         onRefresh: () async {
-          _refreshData();
+          await _fetchAdminPlaylists();
         },
         color: Colors.white,
         backgroundColor: Colors.black,
-        child: CustomScrollView(
-          physics: BouncingScrollPhysics(),
-          slivers: [
-            // Header
-            SliverToBoxAdapter(
-              child: _buildHeader(),
-            ),
-
-            // Music List
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                  final track = musicList[index];
-                  final trackId = track['_id']?.toString() ?? '';
-
-                  // Return preloaded music player if available
-                  if (_preloadedMusicPlayers.containsKey(trackId)) {
-                    return Container(
-                      margin: EdgeInsets.only(bottom: 16),
-                      child: _preloadedMusicPlayers[trackId],
-                    );
-                  }
-
-                  // Fallback - shouldn't happen with preloading
-                  return Container(
-                    margin: EdgeInsets.only(bottom: 16),
-                    child: CommonMusicPlayer(
-                      track: track,
-                      userId: userId,
-                      onLikeChanged: _refreshData,
-                    ),
-                  );
-                },
-                childCount: musicList.length,
-              ),
-            ),
-
-            // Bottom padding
-            SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
-          ],
+        child: SingleChildScrollView(
+          physics: AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              _buildPlaylistContainer(),
+              SizedBox(height: 100),
+            ],
+          ),
         ),
       ),
     );
