@@ -23,7 +23,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
 
   bool isLoadingPlaylists = true;
   bool isLoadingMusics = false;
-  bool isExpanded = false; // Bu artık dropdown açık/kapalı durumunu kontrol eder
+  bool isExpanded = false;
   String? userId;
 
   // Animation controllers
@@ -131,7 +131,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
       _preloadedMusicPlayers.clear();
       _loadedPlayerCount = 0;
       _allMusicPlayersLoaded = false;
-      isExpanded = true; // Playlist seçilince dropdown'u aç
+      isExpanded = true;
     });
 
     _loadingAnimationController.repeat(reverse: true);
@@ -294,10 +294,11 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
     if (adminPlaylists.isEmpty) return SizedBox.shrink();
 
     return Container(
-      margin: const EdgeInsets.all(16),
+      // BOŞLUK KALDIRMA: margin kaldırıldı
       decoration: BoxDecoration(
         color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(16),
+        // MODERN GÖRÜNÜM: border radius azaltıldı
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey[700]!, width: 1),
         boxShadow: [
           BoxShadow(
@@ -312,19 +313,19 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
           // Dropdown Header - Tıklanabilir alan
           InkWell(
             onTap: () {
-              // Dropdown açık/kapalı durumunu toggle et
               setState(() {
                 isExpanded = !isExpanded;
               });
             },
             borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(16),
-              topRight: Radius.circular(16),
-              bottomLeft: isExpanded ? Radius.zero : Radius.circular(16),
-              bottomRight: isExpanded ? Radius.zero : Radius.circular(16),
+              topLeft: Radius.circular(8),
+              topRight: Radius.circular(8),
+              bottomLeft: isExpanded ? Radius.zero : Radius.circular(8),
+              bottomRight: isExpanded ? Radius.zero : Radius.circular(8),
             ),
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              // BOŞLUK AZALTMA: padding azaltıldı
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   if (selectedPlaylist != null) ...[
@@ -422,7 +423,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
               duration: Duration(milliseconds: 300),
               curve: Curves.easeInOut,
               child: Container(
-                padding: EdgeInsets.all(16),
+                // BOŞLUK KALDIRMA: padding tamamen kaldırıldı
                 child: Column(
                   children: [
                     if (isLoadingMusics || !_allMusicPlayersLoaded) ...[
@@ -471,6 +472,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
                         ),
                       ),
                     ] else ...[
+                      // KOMPAKT MÜZİK LİSTESİ: margin tamamen kaldırıldı
                       ...selectedPlaylistMusics.asMap().entries.map((entry) {
                         final index = entry.key;
                         final track = entry.value;
@@ -487,10 +489,8 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
                           );
                         }
 
-                        return Container(
-                          margin: EdgeInsets.only(bottom: index < selectedPlaylistMusics.length - 1 ? 16 : 0),
-                          child: musicPlayer,
-                        );
+                        // BOŞLUKSUZ GÖRÜNÜM: Container margin'i tamamen kaldırıldı
+                        return musicPlayer;
                       }).toList(),
                     ],
                   ],
@@ -568,6 +568,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
           physics: AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
+              // FULL-WIDTH GÖRÜNÜM: Container artık tam genişlikte
               _buildPlaylistContainer(),
               SizedBox(height: 100),
             ],

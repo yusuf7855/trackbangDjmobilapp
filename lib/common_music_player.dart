@@ -13,8 +13,8 @@ class CommonMusicPlayer extends StatefulWidget {
   final VoidCallback? onLikeChanged;
   final Function(String)? onWebViewLoaded;
   final String? webViewKey;
-  final bool preloadWebView; // Yeni parametre
-  final bool lazyLoad; // Lazy loading için
+  final bool preloadWebView;
+  final bool lazyLoad;
 
   const CommonMusicPlayer({
     Key? key,
@@ -46,7 +46,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
   void initState() {
     super.initState();
 
-    // Preload durumunda veya lazy load kapalıysa hemen WebView'ı başlat
     if (widget.preloadWebView || !widget.lazyLoad) {
       _initializeWebView();
     }
@@ -70,7 +69,7 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
   }
 
   void _initializeWebView() {
-    if (_hasStartedLoading) return; // Prevent multiple initializations
+    if (_hasStartedLoading) return;
 
     final spotifyId = widget.track['spotifyId']?.toString();
     if (spotifyId != null && spotifyId.isNotEmpty) {
@@ -92,14 +91,11 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
             onPageFinished: (url) async {
               print('CommonMusicPlayer WebView loaded: $url for track: ${widget.track['title']}');
 
-              // JavaScript optimizasyonları
               await _webViewController.runJavaScript('''
                 (function() {
-                  // Remove any existing styles
                   var existingStyle = document.getElementById('common-custom-style');
                   if (existingStyle) existingStyle.remove();
                   
-                  // Add optimized styles
                   var style = document.createElement('style');
                   style.id = 'common-custom-style';
                   style.innerHTML = `
@@ -126,7 +122,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                   `;
                   document.head.appendChild(style);
                   
-                  // Wait for iframe to be fully loaded
                   setTimeout(function() {
                     var iframe = document.querySelector('iframe');
                     if (iframe) {
@@ -138,14 +133,12 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                 })();
               ''');
 
-              // WebView tam yüklendiğinde state'i güncelle
               if (mounted) {
                 setState(() {
                   _isWebViewLoaded = true;
                 });
               }
 
-              // Callback'i çağır
               if (widget.webViewKey != null && widget.onWebViewLoaded != null) {
                 widget.onWebViewLoaded!(widget.webViewKey!);
               }
@@ -154,7 +147,7 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
               print('CommonMusicPlayer WebView error: ${error.description}');
               if (mounted) {
                 setState(() {
-                  _isWebViewLoaded = true; // Hata durumunda da yüklenmiş say
+                  _isWebViewLoaded = true;
                 });
               }
               if (widget.webViewKey != null && widget.onWebViewLoaded != null) {
@@ -181,7 +174,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
     }
   }
 
-  // Lazy loading için WebView'ı manuel başlatma
   void startWebViewLoading() {
     if (!_isWebViewInitialized && !_hasStartedLoading) {
       _initializeWebView();
@@ -441,7 +433,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
   }
 
   Widget _buildWebViewSection() {
-    // WebView tamamen yüklenmemiş ise şık placeholder göster
     if (!_isWebViewInitialized || !_isWebViewLoaded) {
       return Container(
         height: 80,
@@ -463,7 +454,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              // Music note icon
               Container(
                 padding: EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -477,7 +467,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                 ),
               ),
               SizedBox(width: 12),
-              // Track info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -506,7 +495,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                   ],
                 ),
               ),
-              // Loading indicator
               SizedBox(
                 width: 16,
                 height: 16,
@@ -521,7 +509,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
       );
     }
 
-    // WebView tamamen yüklendi - direkt göster
     return Container(
       height: 80,
       decoration: BoxDecoration(
@@ -548,7 +535,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
 
     return GestureDetector(
       onTap: () {
-        // Lazy loading için WebView'ı başlat
         if (!_isWebViewInitialized && widget.lazyLoad) {
           startWebViewLoading();
         }
@@ -572,43 +558,51 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
             // Spotify Embed Section
             _buildWebViewSection(),
 
-            // Action Buttons Section
+            // MODERN COMPACT ACTION BAR
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              height: 44, // Kompakt yükseklik
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.grey[800],
+                color: Colors.grey[850],
                 borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(12),
                   bottomRight: Radius.circular(12),
                 ),
+                border: Border(
+                  top: BorderSide(color: Colors.grey[700]!, width: 0.5),
+                ),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Like Button
+                  // Like Button - Sol taraf
                   GestureDetector(
                     onTap: widget.userId != null ? _toggleLike : null,
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.grey[700],
-                        borderRadius: BorderRadius.circular(20),
+                        color: _isLikedByUser()
+                            ? Colors.red.withOpacity(0.2)
+                            : Colors.grey[700]?.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(14),
+                        border: _isLikedByUser()
+                            ? Border.all(color: Colors.red.withOpacity(0.4), width: 1)
+                            : Border.all(color: Colors.grey[600]!, width: 0.5),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             _isLikedByUser() ? Icons.favorite : Icons.favorite_border,
-                            color: _isLikedByUser() ? Colors.red : Colors.white,
-                            size: 18,
+                            color: _isLikedByUser() ? Colors.red : Colors.white70,
+                            size: 14,
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 4),
                           Text(
                             '${widget.track['likes'] ?? 0}',
                             style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                              color: _isLikedByUser() ? Colors.red : Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -616,56 +610,99 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                     ),
                   ),
 
-                  // Action Buttons Row
+                  // Spacer - Merkez için
+                  Expanded(child: SizedBox()),
+
+                  // Center Buttons
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Add to Playlist Button
+                      // Add to Playlist Button - MERKEZİ KONUM
                       if (widget.userId != null)
-                        Container(
-                          margin: EdgeInsets.only(right: 8),
-                          child: IconButton(
-                            onPressed: _showAddToPlaylistDialog,
-                            icon: Icon(Icons.playlist_add, color: Colors.white, size: 22),
-                            style: IconButton.styleFrom(
-                              backgroundColor: Colors.grey[700],
-                              shape: CircleBorder(),
-                              padding: EdgeInsets.all(8),
+                        GestureDetector(
+                          onTap: _showAddToPlaylistDialog,
+                          child: Container(
+                            padding: EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+                            ),
+                            child: Icon(
+                                Icons.playlist_add,
+                                color: Colors.blue,
+                                size: 16
                             ),
                           ),
                         ),
 
                       // Beatport Button
-                      if (widget.track['beatportUrl']?.isNotEmpty == true)
+                      if (widget.track['beatportUrl']?.isNotEmpty == true) ...[
+                        SizedBox(width: 8),
                         GestureDetector(
                           onTap: _launchBeatportUrl,
                           child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(
-                              color: Colors.orange.shade700,
-                              borderRadius: BorderRadius.circular(20),
+                              color: Colors.orange.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Image.asset(
                                   'assets/beatport_logo.png',
-                                  width: 16,
-                                  height: 16,
+                                  width: 10,
+                                  height: 10,
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 3),
                                 Text(
-                                  'Buy on Beatport',
+                                  'Buy',
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ),
+                      ],
                     ],
+                  ),
+
+                  // Spacer - Sağ dengeleme
+                  Expanded(child: SizedBox()),
+
+                  // Category Badge - Sağ taraf
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[700]?.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.music_note,
+                          color: Colors.white60,
+                          size: 10,
+                        ),
+                        SizedBox(width: 2),
+                        Text(
+                          widget.track['category']?.toString().toUpperCase() ?? 'TRACK',
+                          style: TextStyle(
+                            color: Colors.white60,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
