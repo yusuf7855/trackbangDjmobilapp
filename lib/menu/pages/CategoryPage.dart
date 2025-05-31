@@ -23,7 +23,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
 
   bool isLoadingPlaylists = true;
   bool isLoadingMusics = false;
-  bool isExpanded = false;
+  bool isExpanded = false; // Bu artık dropdown açık/kapalı durumunu kontrol eder
   String? userId;
 
   // Animation controllers
@@ -131,7 +131,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
       _preloadedMusicPlayers.clear();
       _loadedPlayerCount = 0;
       _allMusicPlayersLoaded = false;
-      isExpanded = true;
+      isExpanded = true; // Playlist seçilince dropdown'u aç
     });
 
     _loadingAnimationController.repeat(reverse: true);
@@ -309,10 +309,13 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
       ),
       child: Column(
         children: [
-          // Dropdown Header
+          // Dropdown Header - Tıklanabilir alan
           InkWell(
             onTap: () {
-              _showPlaylistDropdown();
+              // Dropdown açık/kapalı durumunu toggle et
+              setState(() {
+                isExpanded = !isExpanded;
+              });
             },
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(16),
@@ -359,12 +362,30 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
                             maxLines: 1,
                           ),
                           SizedBox(height: 2),
-                          Text(
-                            '${selectedPlaylist!['musicCount'] ?? 0} tracks',
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 12,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                '${selectedPlaylist!['musicCount'] ?? 0} tracks',
+                                style: TextStyle(
+                                  color: Colors.grey[400],
+                                  fontSize: 12,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(
+                                Icons.touch_app,
+                                color: Colors.grey[400],
+                                size: 12,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                isExpanded ? 'Kapat' : 'Göster',
+                                style: TextStyle(
+                                  color: Colors.grey[400],
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -372,7 +393,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
                   ] else ...[
                     Expanded(
                       child: Text(
-                        'Playlist Seçin',
+                        'Playlist Seçiliyor...',
                         style: TextStyle(
                           color: Colors.grey[400],
                           fontSize: 16,
@@ -394,189 +415,90 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
             ),
           ),
 
-          // Music List (with simple show/hide instead of complex animation)
+          // Music List - Sadece expanded durumunda göster
           if (selectedPlaylist != null && isExpanded) ...[
             Divider(color: Colors.grey[700], height: 1),
-            Container(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  if (isLoadingMusics || !_allMusicPlayersLoaded) ...[
-                    Container(
-                      height: 200,
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'Şarkılar yükleniyor...',
-                              style: TextStyle(
-                                color: Colors.grey[400],
-                                fontSize: 14,
+            AnimatedContainer(
+              duration: Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: Container(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    if (isLoadingMusics || !_allMusicPlayersLoaded) ...[
+                      Container(
+                        height: 200,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
-                            ),
-                            if (_loadedPlayerCount > 0 && selectedPlaylistMusics.isNotEmpty) ...[
-                              SizedBox(height: 12),
+                              SizedBox(height: 16),
                               Text(
-                                '${_loadedPlayerCount}/${selectedPlaylistMusics.length} hazır',
+                                'Şarkılar yükleniyor...',
                                 style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 12,
+                                  color: Colors.grey[400],
+                                  fontSize: 14,
                                 ),
                               ),
+                              if (_loadedPlayerCount > 0 && selectedPlaylistMusics.isNotEmpty) ...[
+                                SizedBox(height: 12),
+                                Text(
+                                  '${_loadedPlayerCount}/${selectedPlaylistMusics.length} hazır',
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ] else if (selectedPlaylistMusics.isEmpty) ...[
-                    Container(
-                      height: 100,
-                      child: Center(
-                        child: Text(
-                          'Bu playlist\'te şarkı bulunamadı',
-                          style: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 16,
                           ),
                         ),
                       ),
-                    ),
-                  ] else ...[
-                    ...selectedPlaylistMusics.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final track = entry.value;
-                      final trackId = track['_id']?.toString() ?? '';
+                    ] else if (selectedPlaylistMusics.isEmpty) ...[
+                      Container(
+                        height: 100,
+                        child: Center(
+                          child: Text(
+                            'Bu playlist\'te şarkı bulunamadı',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      ...selectedPlaylistMusics.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final track = entry.value;
+                        final trackId = track['_id']?.toString() ?? '';
 
-                      Widget musicPlayer;
-                      if (_preloadedMusicPlayers.containsKey(trackId)) {
-                        musicPlayer = _preloadedMusicPlayers[trackId]!;
-                      } else {
-                        musicPlayer = CommonMusicPlayer(
-                          track: track,
-                          userId: userId,
-                          onLikeChanged: _refreshSelectedPlaylist,
+                        Widget musicPlayer;
+                        if (_preloadedMusicPlayers.containsKey(trackId)) {
+                          musicPlayer = _preloadedMusicPlayers[trackId]!;
+                        } else {
+                          musicPlayer = CommonMusicPlayer(
+                            track: track,
+                            userId: userId,
+                            onLikeChanged: _refreshSelectedPlaylist,
+                          );
+                        }
+
+                        return Container(
+                          margin: EdgeInsets.only(bottom: index < selectedPlaylistMusics.length - 1 ? 16 : 0),
+                          child: musicPlayer,
                         );
-                      }
-
-                      return Container(
-                        margin: EdgeInsets.only(bottom: index < selectedPlaylistMusics.length - 1 ? 16 : 0),
-                        child: musicPlayer,
-                      );
-                    }).toList(),
+                      }).toList(),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  void _showPlaylistDropdown() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Colors.grey[900],
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Text(
-                    'Playlist Seçin',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Spacer(),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: Icon(Icons.close, color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              constraints: BoxConstraints(maxHeight: 400),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: adminPlaylists.length,
-                itemBuilder: (context, index) {
-                  final playlist = adminPlaylists[index];
-                  final subCategory = playlist['subCategory']?.toString() ?? '';
-                  final name = playlist['name']?.toString() ?? 'Unnamed';
-                  final musicCount = playlist['musicCount'] ?? 0;
-                  final isSelected = selectedPlaylist?['_id'] == playlist['_id'];
-
-                  return Container(
-                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue.withOpacity(0.2) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                      border: isSelected ? Border.all(color: Colors.blue, width: 1) : null,
-                    ),
-                    child: ListTile(
-                      onTap: () {
-                        Navigator.pop(context);
-                        _selectPlaylist(playlist);
-                      },
-                      leading: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.orange, Colors.red],
-                          ),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          subCategory,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        name,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '$musicCount tracks',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: isSelected
-                          ? Icon(Icons.check_circle, color: Colors.blue)
-                          : Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 16),
-                    ),
-                  );
-                },
-              ),
-            ),
-            SizedBox(height: 20),
-          ],
-        ),
       ),
     );
   }
