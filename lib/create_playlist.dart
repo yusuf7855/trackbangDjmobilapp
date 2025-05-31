@@ -15,14 +15,17 @@ class CreatePlaylistPage extends StatefulWidget {
 
 class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
   final TextEditingController _nameController = TextEditingController();
-  String _selectedGenre = 'pop';
+  String _selectedGenre = 'afrohouse';
   bool _isPublic = false;
   bool _isLoading = false;
   String? _userId;
 
-  final List<String> genres = [
-    'pop', 'rock', 'hiphop', 'jazz',
-    'classical', 'electronic', 'rnb', 'country', 'other'
+  final List<Map<String, String>> genres = [
+    {'key': 'afrohouse', 'display': 'Afro House'},
+    {'key': 'indiedance', 'display': 'Indie Dance'},
+    {'key': 'organichouse', 'display': 'Organic House'},
+    {'key': 'downtempo', 'display': 'Down Tempo'},
+    {'key': 'melodichouse', 'display': 'Melodic House'},
   ];
 
   @override
@@ -101,16 +104,68 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
     );
   }
 
+  Widget _buildGenreChip(Map<String, String> genre) {
+    final isSelected = _selectedGenre == genre['key'];
+
+    return GestureDetector(
+      onTap: () => setState(() => _selectedGenre = genre['key']!),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 200),
+        margin: EdgeInsets.only(right: 8, bottom: 8),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? LinearGradient(colors: [Colors.blue, Colors.purple])
+              : null,
+          color: isSelected ? null : Colors.grey[800],
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(
+            color: isSelected ? Colors.transparent : Colors.grey[600]!,
+            width: 1,
+          ),
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.3),
+              blurRadius: 8,
+              offset: Offset(0, 4),
+            ),
+          ] : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSelected) ...[
+              Icon(Icons.check_circle, color: Colors.white, size: 16),
+              SizedBox(width: 6),
+            ],
+            Text(
+              genre['display']!,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[900],
+      backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
         title: const Text(
           'Create New Playlist',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         iconTheme: IconThemeData(color: Colors.white),
         actions: [
@@ -125,10 +180,60 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header Section
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.grey[850]!,
+                    Colors.grey[900]!,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey[700]!, width: 1),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [Colors.blue, Colors.purple]),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.playlist_add, color: Colors.white, size: 32),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Create Your Playlist',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Build your perfect music collection',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 32),
+
+            // Playlist Name Section
             Text(
               'PLAYLIST NAME',
               style: TextStyle(
@@ -138,28 +243,28 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                 letterSpacing: 1.2,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey[800],
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[600]!, width: 1),
               ),
               child: TextField(
                 controller: _nameController,
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: Colors.white, fontSize: 16),
                 decoration: InputDecoration(
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                   hintText: 'Enter playlist name',
-                  hintStyle: TextStyle(color: Colors.grey[500]),
+                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
+                  prefixIcon: Icon(Icons.music_note, color: Colors.grey[500]),
                 ),
               ),
             ),
             const SizedBox(height: 32),
 
+            // Genre Section
             Text(
               'GENRE',
               style: TextStyle(
@@ -169,51 +274,53 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                 letterSpacing: 1.2,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: genres.map((genre) {
-                return ChoiceChip(
-                  label: Text(
-                    genre,
-                    style: TextStyle(
-                      color: _selectedGenre == genre
-                          ? Colors.black
-                          : Colors.white,
-                    ),
-                  ),
-                  selected: _selectedGenre == genre,
-                  selectedColor: Colors.white,
-                  backgroundColor: Colors.grey[800],
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  onSelected: (selected) {
-                    setState(() => _selectedGenre = genre);
-                  },
-                );
-              }).toList(),
+              children: genres.map((genre) => _buildGenreChip(genre)).toList(),
             ),
             const SizedBox(height: 32),
 
+            // Privacy Section
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey[800],
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[600]!, width: 1),
               ),
               child: SwitchListTile(
-                title: Text(
-                  'Public Playlist',
-                  style: TextStyle(color: Colors.white),
+                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                title: Row(
+                  children: [
+                    Icon(
+                      _isPublic ? Icons.public : Icons.lock,
+                      color: _isPublic ? Colors.green : Colors.orange,
+                      size: 20,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Public Playlist',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
-                subtitle: Text(
-                  _isPublic
-                      ? 'Visible to everyone'
-                      : 'Only visible to you',
-                  style: TextStyle(color: Colors.grey[400]),
+                subtitle: Padding(
+                  padding: EdgeInsets.only(left: 32, top: 4),
+                  child: Text(
+                    _isPublic
+                        ? 'Everyone can see and listen to this playlist'
+                        : 'Only you can see this playlist',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
-                activeColor: Colors.white,
+                activeColor: Colors.green,
+                inactiveThumbColor: Colors.grey[400],
                 inactiveTrackColor: Colors.grey[600],
                 value: _isPublic,
                 onChanged: (value) => setState(() => _isPublic = value),
@@ -221,25 +328,70 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
             ),
             const SizedBox(height: 40),
 
-            SizedBox(
+            // Create Button
+            Container(
               width: double.infinity,
-              height: 50,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.blue, Colors.purple],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  elevation: 0,
                 ),
                 onPressed: _isLoading ? null : _createPlaylist,
-                child: Text(
-                  'CREATE PLAYLIST',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isLoading) ...[
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'CREATING...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ] else ...[
+                      Icon(Icons.add_circle_outline, color: Colors.white, size: 24),
+                      SizedBox(width: 12),
+                      Text(
+                        'CREATE PLAYLIST',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
