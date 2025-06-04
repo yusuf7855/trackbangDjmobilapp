@@ -18,12 +18,11 @@ class CategoryPage extends StatefulWidget {
 class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMixin {
   // Admin playlists data
   List<Map<String, dynamic>> adminPlaylists = [];
-  Map<String, dynamic>? selectedPlaylist;
-  List<Map<String, dynamic>> selectedPlaylistMusics = [];
+  String? expandedPlaylistId; // Hangi playlist açık
+  Map<String, List<Map<String, dynamic>>> playlistMusics = <String, List<Map<String, dynamic>>>{}; // Her playlist'in müzikleri
 
   bool isLoadingPlaylists = true;
-  bool isLoadingMusics = false;
-  bool isExpanded = false;
+  Map<String, bool> isLoadingMusics = <String, bool>{}; // Her playlist için loading durumu
   String? userId;
 
   // Animation controllers
@@ -31,11 +30,11 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
   late Animation<double> _scaleAnimation;
   late Animation<Color?> _colorAnimation;
 
-  // Preloading management
-  final Map<String, bool> _musicPlayerLoadStatus = {};
-  final Map<String, Widget> _preloadedMusicPlayers = {};
-  bool _allMusicPlayersLoaded = false;
-  int _loadedPlayerCount = 0;
+  // Preloading management - Her playlist için ayrı
+  Map<String, Map<String, bool>> _musicPlayerLoadStatus = <String, Map<String, bool>>{};
+  Map<String, Map<String, Widget>> _preloadedMusicPlayers = <String, Map<String, Widget>>{};
+  Map<String, bool> _allMusicPlayersLoaded = <String, bool>{};
+  Map<String, int> _loadedPlayerCount = <String, int>{};
 
   @override
   void initState() {
@@ -51,7 +50,6 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
   }
 
   void _initializeAnimations() {
-    // Loading animation
     _loadingAnimationController = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: 1000),
@@ -98,10 +96,23 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
             isLoadingPlaylists = false;
           });
 
-          // Auto-select first playlist if available
-          if (playlists.isNotEmpty) {
-            await _selectPlaylist(playlists.first);
+          // Her playlist için müzik verilerini hazırla
+          for (final playlist in playlists) {
+            final playlistId = playlist['_id']?.toString() ?? '';
+            if (playlistId.isEmpty) continue;
+
+            final musics = List<Map<String, dynamic>>.from(playlist['musics'] ?? []);
+            playlistMusics[playlistId] = musics;
+
+            // Loading state'leri initialize et - TİP GÜVENLİ
+            isLoadingMusics[playlistId] = false;
+            _allMusicPlayersLoaded[playlistId] = false;
+            _loadedPlayerCount[playlistId] = 0;
+            _musicPlayerLoadStatus[playlistId] = <String, bool>{};
+            _preloadedMusicPlayers[playlistId] = <String, Widget>{};
           }
+
+          _loadingAnimationController.stop();
         }
       } else {
         throw Exception('Failed to load admin playlists');
@@ -122,45 +133,80 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
     }
   }
 
-  Future<void> _selectPlaylist(Map<String, dynamic> playlist) async {
-    setState(() {
-      selectedPlaylist = playlist;
-      isLoadingMusics = true;
-      selectedPlaylistMusics = [];
-      _musicPlayerLoadStatus.clear();
-      _preloadedMusicPlayers.clear();
-      _loadedPlayerCount = 0;
-      _allMusicPlayersLoaded = false;
-      isExpanded = true;
-    });
+  Future<void> _togglePlaylist(String playlistId) async {
+    if (playlistId.isEmpty) return;
 
-    _loadingAnimationController.repeat(reverse: true);
-
-    // Extract musics from selected playlist
-    final musics = List<Map<String, dynamic>>.from(playlist['musics'] ?? []);
-
-    setState(() {
-      selectedPlaylistMusics = musics;
-    });
-
-    if (musics.isNotEmpty) {
-      await _preloadMusicPlayers(musics);
-    } else {
+    // Eğer tıklanan playlist zaten açıksa kapat
+    if (expandedPlaylistId == playlistId) {
       setState(() {
-        isLoadingMusics = false;
-        _allMusicPlayersLoaded = true;
+        expandedPlaylistId = null;
       });
-      _loadingAnimationController.stop();
+      return;
+    }
+
+    // Başka bir playlist'i aç
+    setState(() {
+      expandedPlaylistId = playlistId;
+
+      // Güvenli initialization - Map'lerde key yoksa oluştur
+      if (!isLoadingMusics.containsKey(playlistId)) {
+        isLoadingMusics[playlistId] = false;
+      }
+      if (!_allMusicPlayersLoaded.containsKey(playlistId)) {
+        _allMusicPlayersLoaded[playlistId] = false;
+      }
+      if (!_loadedPlayerCount.containsKey(playlistId)) {
+        _loadedPlayerCount[playlistId] = 0;
+      }
+      if (!_musicPlayerLoadStatus.containsKey(playlistId)) {
+        _musicPlayerLoadStatus[playlistId] = <String, bool>{};
+      }
+      if (!_preloadedMusicPlayers.containsKey(playlistId)) {
+        _preloadedMusicPlayers[playlistId] = <String, Widget>{};
+      }
+
+      isLoadingMusics[playlistId] = true;
+    });
+
+    // Eğer bu playlist'in müzikleri daha önce preload edilmemişse preload et
+    if (!(_allMusicPlayersLoaded[playlistId] ?? false)) {
+      await _preloadMusicPlayers(playlistId);
+    } else {
+      // Zaten preload edilmişse sadece loading'i kapat
+      setState(() {
+        isLoadingMusics[playlistId] = false;
+      });
     }
   }
 
-  Future<void> _preloadMusicPlayers(List<Map<String, dynamic>> musics) async {
-    print('CategoryPage: Preloading ${musics.length} music players for playlist: ${selectedPlaylist?['name']}');
+  Future<void> _preloadMusicPlayers(String playlistId) async {
+    if (playlistId.isEmpty) return;
 
-    // Initialize loading status for all tracks
+    final musics = playlistMusics[playlistId] ?? [];
+
+    if (musics.isEmpty) {
+      setState(() {
+        isLoadingMusics[playlistId] = false;
+        _allMusicPlayersLoaded[playlistId] = true;
+      });
+      return;
+    }
+
+    print('CategoryPage: Preloading ${musics.length} music players for playlist: $playlistId');
+
+    // Initialize loading status for all tracks in this playlist
+    if (!_musicPlayerLoadStatus.containsKey(playlistId)) {
+      _musicPlayerLoadStatus[playlistId] = <String, bool>{};
+    }
+    if (!_preloadedMusicPlayers.containsKey(playlistId)) {
+      _preloadedMusicPlayers[playlistId] = <String, Widget>{};
+    }
+
     for (final track in musics) {
       final trackId = track['_id']?.toString() ?? '';
-      _musicPlayerLoadStatus[trackId] = false;
+      if (trackId.isNotEmpty) {
+        _musicPlayerLoadStatus[playlistId]![trackId] = false;
+      }
     }
 
     // Create preloaded music players
@@ -168,18 +214,20 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
       final track = musics[i];
       final trackId = track['_id']?.toString() ?? '';
 
+      if (trackId.isEmpty) continue;
+
       final musicPlayer = CommonMusicPlayer(
-        key: ValueKey('category_${widget.category}_${selectedPlaylist?['_id']}_${trackId}_$i'),
+        key: ValueKey('category_${widget.category}_${playlistId}_${trackId}_$i'),
         track: track,
         userId: userId,
         preloadWebView: true,
         lazyLoad: false,
-        webViewKey: trackId,
-        onWebViewLoaded: _onMusicPlayerLoaded,
-        onLikeChanged: _refreshSelectedPlaylist,
+        webViewKey: '${playlistId}_${trackId}',
+        onWebViewLoaded: (webViewKey) => _onMusicPlayerLoaded(playlistId, trackId),
+        onLikeChanged: () => _refreshPlaylist(playlistId),
       );
 
-      _preloadedMusicPlayers[trackId] = musicPlayer;
+      _preloadedMusicPlayers[playlistId]![trackId] = musicPlayer;
     }
 
     // Simulate realistic loading time
@@ -187,36 +235,67 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
 
     if (mounted) {
       setState(() {
-        isLoadingMusics = false;
-        _allMusicPlayersLoaded = true;
+        isLoadingMusics[playlistId] = false;
+        _allMusicPlayersLoaded[playlistId] = true;
       });
-      _loadingAnimationController.stop();
-      print('CategoryPage: All music players preloaded for playlist: ${selectedPlaylist?['name']}');
+      print('CategoryPage: All music players preloaded for playlist: $playlistId');
     }
   }
 
-  void _onMusicPlayerLoaded(String trackId) {
-    if (mounted && _musicPlayerLoadStatus.containsKey(trackId)) {
+  void _onMusicPlayerLoaded(String playlistId, String trackId) {
+    if (mounted &&
+        _musicPlayerLoadStatus.containsKey(playlistId) &&
+        _musicPlayerLoadStatus[playlistId]!.containsKey(trackId)) {
+
       setState(() {
-        _musicPlayerLoadStatus[trackId] = true;
-        _loadedPlayerCount++;
+        _musicPlayerLoadStatus[playlistId]![trackId] = true;
+        _loadedPlayerCount[playlistId] = (_loadedPlayerCount[playlistId] ?? 0) + 1;
       });
 
-      // Check if all players are loaded
-      if (_loadedPlayerCount >= selectedPlaylistMusics.length && !_allMusicPlayersLoaded) {
+      // Check if all players in this playlist are loaded
+      final totalMusics = playlistMusics[playlistId]?.length ?? 0;
+      if ((_loadedPlayerCount[playlistId] ?? 0) >= totalMusics &&
+          !(_allMusicPlayersLoaded[playlistId] ?? false)) {
         setState(() {
-          isLoadingMusics = false;
-          _allMusicPlayersLoaded = true;
+          isLoadingMusics[playlistId] = false;
+          _allMusicPlayersLoaded[playlistId] = true;
         });
-        _loadingAnimationController.stop();
       }
     }
   }
 
-  void _refreshSelectedPlaylist() {
-    if (selectedPlaylist != null) {
-      _selectPlaylist(selectedPlaylist!);
+  Future<void> _refreshPlaylist(String playlistId) async {
+    print('CategoryPage: Refreshing playlist: $playlistId');
+
+    // Tüm playlist'leri yeniden fetch et ama açık olan playlist'i koru
+    final wasExpanded = expandedPlaylistId == playlistId;
+
+    await _fetchAdminPlaylists();
+
+    // Eğer refresh edilen playlist açıktı, yeniden aç
+    if (wasExpanded) {
+      setState(() {
+        expandedPlaylistId = playlistId;
+      });
     }
+  }
+
+  Future<void> _refreshPage() async {
+    print('CategoryPage: Full page refresh triggered');
+    setState(() {
+      expandedPlaylistId = null;
+      adminPlaylists = [];
+      playlistMusics.clear();
+      isLoadingPlaylists = true;
+      isLoadingMusics.clear();
+      _musicPlayerLoadStatus.clear();
+      _preloadedMusicPlayers.clear();
+      _allMusicPlayersLoaded.clear();
+      _loadedPlayerCount.clear();
+    });
+
+    _loadingAnimationController.repeat(reverse: true);
+    await _fetchAdminPlaylists();
   }
 
   Widget _buildLoadingAnimation() {
@@ -250,9 +329,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
           ),
           SizedBox(height: 30),
           Text(
-            isLoadingPlaylists
-                ? '${widget.title} Playlist\'leri Yükleniyor...'
-                : 'Şarkılar Hazırlanıyor...',
+            '${widget.title} Playlist\'leri Yükleniyor...',
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 18,
@@ -261,154 +338,133 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
           ),
           SizedBox(height: 20),
           Text(
-            isLoadingPlaylists
-                ? 'Admin playlist\'leri getiriliyor'
-                : 'Spotify player\'lar hazırlanıyor',
+            'Admin playlist\'leri getiriliyor',
             style: TextStyle(
               color: Colors.white.withOpacity(0.6),
               fontSize: 14,
             ),
           ),
-          if (!isLoadingPlaylists && _loadedPlayerCount > 0 && selectedPlaylistMusics.isNotEmpty) ...[
-            SizedBox(height: 30),
-            LinearProgressIndicator(
-              value: _loadedPlayerCount / selectedPlaylistMusics.length,
-              backgroundColor: Colors.grey[800],
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-            SizedBox(height: 12),
-            Text(
-              '${_loadedPlayerCount}/${selectedPlaylistMusics.length} şarkı hazır',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 12,
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildPlaylistContainer() {
-    if (adminPlaylists.isEmpty) return SizedBox.shrink();
+  Widget _buildPlaylistCard(Map<String, dynamic> playlist, int index) {
+    final playlistId = playlist['_id']?.toString() ?? '';
+    if (playlistId.isEmpty) return SizedBox.shrink();
+
+    final isExpanded = expandedPlaylistId == playlistId;
+    final musics = playlistMusics[playlistId] ?? [];
+
+    // Güvenli Map erişimi
+    final isLoadingThisPlaylist = isLoadingMusics[playlistId] ?? false;
+    final allLoaded = _allMusicPlayersLoaded[playlistId] ?? false;
+    final loadedCount = _loadedPlayerCount[playlistId] ?? 0;
 
     return Container(
-      // BOŞLUK KALDIRMA: margin kaldırıldı
+      margin: EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.grey[900],
-        // MODERN GÖRÜNÜM: border radius azaltıldı
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[700]!, width: 1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isExpanded ? Colors.blue.withOpacity(0.5) : Colors.grey[700]!,
+          width: isExpanded ? 2 : 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 8,
-            offset: Offset(0, 4),
+            color: isExpanded
+                ? Colors.blue.withOpacity(0.2)
+                : Colors.black.withOpacity(0.3),
+            blurRadius: isExpanded ? 12 : 6,
+            offset: Offset(0, isExpanded ? 6 : 3),
           ),
         ],
       ),
       child: Column(
         children: [
-          // Dropdown Header - Tıklanabilir alan
+          // Playlist Header - Tıklanabilir
           InkWell(
-            onTap: () {
-              setState(() {
-                isExpanded = !isExpanded;
-              });
-            },
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(8),
-              topRight: Radius.circular(8),
-              bottomLeft: isExpanded ? Radius.zero : Radius.circular(8),
-              bottomRight: isExpanded ? Radius.zero : Radius.circular(8),
-            ),
+            onTap: () => _togglePlaylist(playlistId),
+            borderRadius: BorderRadius.circular(12),
             child: Container(
-              // BOŞLUK AZALTMA: padding azaltıldı
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: EdgeInsets.all(16),
               child: Row(
                 children: [
-                  if (selectedPlaylist != null) ...[
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.orange, Colors.red],
-                        ),
-                        borderRadius: BorderRadius.circular(6),
+                  // SubCategory Badge
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.orange, Colors.red],
                       ),
-                      child: Text(
-                        selectedPlaylist!['subCategory']?.toString() ?? '',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.orange.withOpacity(0.3),
+                          blurRadius: 6,
+                          offset: Offset(0, 2),
                         ),
+                      ],
+                    ),
+                    child: Text(
+                      playlist['subCategory']?.toString() ?? '',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            selectedPlaylist!['name']?.toString() ?? 'Unnamed',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                  ),
+
+                  SizedBox(width: 16),
+
+                  // Playlist Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          playlist['name']?.toString() ?? 'Unnamed Playlist',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.music_note,
+                              color: Colors.grey[400],
+                              size: 16,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                          SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Text(
-                                '${selectedPlaylist!['musicCount'] ?? 0} tracks',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 12,
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Icon(
-                                Icons.touch_app,
+                            SizedBox(width: 4),
+                            Text(
+                              '${playlist['musicCount'] ?? 0} tracks',
+                              style: TextStyle(
                                 color: Colors.grey[400],
-                                size: 12,
+                                fontSize: 14,
                               ),
-                              SizedBox(width: 4),
-                              Text(
-                                isExpanded ? 'Kapat' : 'Göster',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ] else ...[
-                    Expanded(
-                      child: Text(
-                        'Playlist Seçiliyor...',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 16,
+                            ),
+
+                          ],
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
+
+                  // Expand/Collapse Icon
                   AnimatedRotation(
                     turns: isExpanded ? 0.5 : 0,
                     duration: Duration(milliseconds: 300),
                     child: Icon(
                       Icons.keyboard_arrow_down,
-                      color: Colors.white,
-                      size: 24,
+                      color: isExpanded ? Colors.blue : Colors.white70,
+                      size: 28,
                     ),
                   ),
                 ],
@@ -416,38 +472,45 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
             ),
           ),
 
-          // Music List - Sadece expanded durumunda göster
-          if (selectedPlaylist != null && isExpanded) ...[
+          // Music List - Sadece expanded olduğunda göster
+          if (isExpanded) ...[
             Divider(color: Colors.grey[700], height: 1),
             AnimatedContainer(
-              duration: Duration(milliseconds: 300),
+              duration: Duration(milliseconds: 400),
               curve: Curves.easeInOut,
               child: Container(
-                // BOŞLUK KALDIRMA: padding tamamen kaldırıldı
+                padding: EdgeInsets.symmetric(vertical: 8),
                 child: Column(
                   children: [
-                    if (isLoadingMusics || !_allMusicPlayersLoaded) ...[
+                    if (isLoadingThisPlaylist || !allLoaded) ...[
                       Container(
-                        height: 200,
+                        height: 120,
                         child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                                strokeWidth: 3,
                               ),
                               SizedBox(height: 16),
                               Text(
-                                'Şarkılar yükleniyor...',
+                                'Spotify player\'lar hazırlanıyor...',
                                 style: TextStyle(
                                   color: Colors.grey[400],
                                   fontSize: 14,
                                 ),
                               ),
-                              if (_loadedPlayerCount > 0 && selectedPlaylistMusics.isNotEmpty) ...[
-                                SizedBox(height: 12),
+                              if (loadedCount > 0 && musics.isNotEmpty) ...[
+                                SizedBox(height: 8),
+                                LinearProgressIndicator(
+                                  value: loadedCount / musics.length,
+                                  backgroundColor: Colors.grey[800],
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                                ),
+                                SizedBox(height: 8),
                                 Text(
-                                  '${_loadedPlayerCount}/${selectedPlaylistMusics.length} hazır',
+                                  '${loadedCount}/${musics.length} player hazır',
                                   style: TextStyle(
                                     color: Colors.grey[500],
                                     fontSize: 12,
@@ -458,40 +521,55 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
                           ),
                         ),
                       ),
-                    ] else if (selectedPlaylistMusics.isEmpty) ...[
+                    ] else if (musics.isEmpty) ...[
                       Container(
-                        height: 100,
+                        height: 80,
                         child: Center(
-                          child: Text(
-                            'Bu playlist\'te şarkı bulunamadı',
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 16,
-                            ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.music_off,
+                                color: Colors.grey[600],
+                                size: 32,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Bu playlist\'te şarkı bulunamadı',
+                                style: TextStyle(
+                                  color: Colors.grey[400],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ] else ...[
-                      // KOMPAKT MÜZİK LİSTESİ: margin tamamen kaldırıldı
-                      ...selectedPlaylistMusics.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final track = entry.value;
-                        final trackId = track['_id']?.toString() ?? '';
+                      // Music Players List
+                      Column(
+                        children: musics.asMap().entries.map((entry) {
+                          final trackIndex = entry.key;
+                          final track = entry.value;
+                          final trackId = track['_id']?.toString() ?? '';
 
-                        Widget musicPlayer;
-                        if (_preloadedMusicPlayers.containsKey(trackId)) {
-                          musicPlayer = _preloadedMusicPlayers[trackId]!;
-                        } else {
-                          musicPlayer = CommonMusicPlayer(
-                            track: track,
-                            userId: userId,
-                            onLikeChanged: _refreshSelectedPlaylist,
-                          );
-                        }
+                          Widget musicPlayer;
 
-                        // BOŞLUKSUZ GÖRÜNÜM: Container margin'i tamamen kaldırıldı
-                        return musicPlayer;
-                      }).toList(),
+                          // Güvenli preloaded player erişimi
+                          if (_preloadedMusicPlayers.containsKey(playlistId) &&
+                              _preloadedMusicPlayers[playlistId]!.containsKey(trackId)) {
+                            musicPlayer = _preloadedMusicPlayers[playlistId]![trackId]!;
+                          } else {
+                            musicPlayer = CommonMusicPlayer(
+                              track: track,
+                              userId: userId,
+                              onLikeChanged: () => _refreshPlaylist(playlistId),
+                            );
+                          }
+
+                          return musicPlayer;
+                        }).toList(),
+                      ),
                     ],
                   ],
                 ),
@@ -522,6 +600,13 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
         ),
         elevation: 0,
         automaticallyImplyLeading: true,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, color: Colors.white),
+            onPressed: _refreshPage,
+            tooltip: 'Sayfayı Yenile',
+          ),
+        ],
       ),
       backgroundColor: Colors.black,
       body: isLoadingPlaylists
@@ -547,7 +632,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: _fetchAdminPlaylists,
+              onPressed: _refreshPage,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
@@ -559,20 +644,20 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
         ),
       )
           : RefreshIndicator(
-        onRefresh: () async {
-          await _fetchAdminPlaylists();
-        },
+        onRefresh: _refreshPage,
         color: Colors.white,
         backgroundColor: Colors.black,
-        child: SingleChildScrollView(
+        child: ListView.builder(
+          padding: EdgeInsets.all(16),
           physics: AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
-              // FULL-WIDTH GÖRÜNÜM: Container artık tam genişlikte
-              _buildPlaylistContainer(),
-              SizedBox(height: 100),
-            ],
-          ),
+          itemCount: adminPlaylists.length + 1, // +1 for bottom padding
+          itemBuilder: (context, index) {
+            if (index == adminPlaylists.length) {
+              return SizedBox(height: 100); // Bottom padding
+            }
+
+            return _buildPlaylistCard(adminPlaylists[index], index);
+          },
         ),
       ),
     );
