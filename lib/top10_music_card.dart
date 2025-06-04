@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,14 +35,12 @@ class Top10MusicCard extends StatefulWidget {
 }
 
 class _Top10MusicCardState extends State<Top10MusicCard>
-    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
+    with AutomaticKeepAliveClientMixin {
 
   late WebViewController _webViewController;
   bool _isWebViewInitialized = false;
   bool _isWebViewLoaded = false;
   List<Map<String, dynamic>> userPlaylists = [];
-  late AnimationController _animationController;
-  late Animation<double> _pulseAnimation;
   String? _currentSpotifyId;
 
   @override
@@ -49,7 +49,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
   @override
   void initState() {
     super.initState();
-    _initializeAnimation();
 
     if (widget.preloadWebView) {
       _initializeWebView();
@@ -70,40 +69,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
       _isWebViewLoaded = false;
       _initializeWebView();
     }
-
-    if (oldWidget.rank != widget.rank) {
-      print('Top10MusicCard: Rank changed from ${oldWidget.rank} to ${widget.rank}');
-      _restartPulseAnimation();
-    }
-  }
-
-  void _initializeAnimation() {
-    _animationController = AnimationController(
-      duration: Duration(seconds: 2),
-      vsync: this,
-    );
-
-    _pulseAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.05,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
-
-    if (widget.rank <= 3) {
-      _animationController.repeat(reverse: true);
-    }
-  }
-
-  void _restartPulseAnimation() {
-    if (widget.rank <= 3) {
-      _animationController.reset();
-      _animationController.repeat(reverse: true);
-    } else {
-      _animationController.stop();
-      _animationController.reset();
-    }
   }
 
   void _initializeWebView() {
@@ -113,7 +78,17 @@ class _Top10MusicCardState extends State<Top10MusicCard>
     if (spotifyId != null && spotifyId.isNotEmpty) {
       _currentSpotifyId = spotifyId;
 
-      _webViewController = WebViewController()
+      late final PlatformWebViewControllerCreationParams params;
+      if (WebViewPlatform.instance is WebKitWebViewPlatform) {
+        params = WebKitWebViewControllerCreationParams(
+          allowsInlineMediaPlayback: true,
+          mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+        );
+      } else {
+        params = const PlatformWebViewControllerCreationParams();
+      }
+
+      _webViewController = WebViewController.fromPlatformCreationParams(params)
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setBackgroundColor(Colors.transparent)
         ..setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1')
@@ -125,47 +100,51 @@ class _Top10MusicCardState extends State<Top10MusicCard>
             onPageFinished: (url) async {
               print('Top10MusicCard WebView loaded: $url for track: ${widget.track['title']}');
 
-              await _webViewController.runJavaScript('''
-                (function() {
-                  var existingStyle = document.getElementById('top10-custom-style');
-                  if (existingStyle) existingStyle.remove();
-                  
-                  var style = document.createElement('style');
-                  style.id = 'top10-custom-style';
-                  style.innerHTML = `
-                    * { 
-                      -webkit-transform: translateZ(0); 
-                      transform: translateZ(0);
-                      -webkit-backface-visibility: hidden;
-                      backface-visibility: hidden;
-                    }
-                    body { 
-                      overflow: hidden !important; 
-                      margin: 0 !important; 
-                      padding: 0 !important;
-                      background: transparent !important;
-                    }
-                    iframe {
-                      border: none !important;
-                      background: transparent !important;
-                      border-radius: 8px !important;
-                    }
-                    .spotifyContent {
-                      border-radius: 8px !important;
-                    }
-                  `;
-                  document.head.appendChild(style);
-                  
-                  setTimeout(function() {
-                    var iframe = document.querySelector('iframe');
-                    if (iframe) {
-                      iframe.onload = function() {
-                        console.log('Top10MusicCard Iframe fully loaded');
-                      };
-                    }
-                  }, 500);
-                })();
-              ''');
+              try {
+                await _webViewController.runJavaScript('''
+                  (function() {
+                    var existingStyle = document.getElementById('top10-custom-style');
+                    if (existingStyle) existingStyle.remove();
+                    
+                    var style = document.createElement('style');
+                    style.id = 'top10-custom-style';
+                    style.innerHTML = \`
+                      * { 
+                        -webkit-transform: translateZ(0); 
+                        transform: translateZ(0);
+                        -webkit-backface-visibility: hidden;
+                        backface-visibility: hidden;
+                      }
+                      body { 
+                        overflow: hidden !important; 
+                        margin: 0 !important; 
+                        padding: 0 !important;
+                        background: transparent !important;
+                      }
+                      iframe {
+                        border: none !important;
+                        background: transparent !important;
+                        border-radius: 8px !important;
+                      }
+                      .spotifyContent {
+                        border-radius: 8px !important;
+                      }
+                    \`;
+                    document.head.appendChild(style);
+                    
+                    setTimeout(function() {
+                      var iframe = document.querySelector('iframe');
+                      if (iframe) {
+                        iframe.onload = function() {
+                          console.log('Top10MusicCard Iframe fully loaded');
+                        };
+                      }
+                    }, 500);
+                  })();
+                ''');
+              } catch (e) {
+                print('JavaScript execution error: $e');
+              }
 
               if (mounted) {
                 setState(() {
@@ -201,6 +180,12 @@ class _Top10MusicCardState extends State<Top10MusicCard>
         ..loadRequest(Uri.parse(
           'https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0&view=compact&show-cover=0',
         ));
+
+      if (_webViewController.platform is AndroidWebViewController) {
+        AndroidWebViewController.enableDebugging(true);
+        (_webViewController.platform as AndroidWebViewController)
+            .setMediaPlaybackRequiresUserGesture(false);
+      }
 
       if (mounted) {
         setState(() {
@@ -365,189 +350,115 @@ class _Top10MusicCardState extends State<Top10MusicCard>
         backgroundColor: backgroundColor,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
-  }
-
-  Widget _buildRankBadge() {
-    Color badgeColor;
-    Color textColor;
-    IconData? icon;
-    bool hasGlow = false;
-
-    if (widget.rank <= 3) {
-      hasGlow = true;
-      switch (widget.rank) {
-        case 1:
-          badgeColor = Color(0xFFFFD700); // Gold
-          textColor = Colors.black;
-          icon = Icons.emoji_events;
-          break;
-        case 2:
-          badgeColor = Color(0xFFC0C0C0); // Silver
-          textColor = Colors.black;
-          icon = Icons.emoji_events;
-          break;
-        case 3:
-          badgeColor = Color(0xFFCD7F32); // Bronze
-          textColor = Colors.white;
-          icon = Icons.emoji_events;
-          break;
-        default:
-          badgeColor = Colors.grey[800]!;
-          textColor = Colors.white;
-      }
-    } else {
-      badgeColor = Colors.grey[800]!;
-      textColor = Colors.white;
-    }
-
-    Widget badge = Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: badgeColor,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: widget.rank <= 3 ? Colors.white : Colors.grey[600]!,
-          width: 2,
-        ),
-        boxShadow: hasGlow ? [
-          BoxShadow(
-            color: badgeColor.withOpacity(0.4),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
-        ] : null,
-      ),
-      child: widget.rank <= 3 && icon != null
-          ? Icon(icon, color: textColor, size: 24)
-          : Center(
-        child: Text(
-          widget.rank.toString(),
-          style: TextStyle(
-            color: textColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ),
-    );
-
-    if (widget.rank <= 3) {
-      return AnimatedBuilder(
-        animation: _pulseAnimation,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _pulseAnimation.value,
-            child: badge,
-          );
-        },
-      );
-    }
-
-    return badge;
   }
 
   Widget _buildWebViewSection() {
     if (!_isWebViewInitialized || !_isWebViewLoaded) {
       return Container(
-        height: 80,
-        margin: EdgeInsets.symmetric(horizontal: 12),
+        height: 85,
+        margin: EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey[700]!, width: 1),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.grey[850]!,
-              Colors.grey[900]!,
-            ],
-          ),
+          color: Colors.grey[900],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[800]!, width: 1),
         ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
+        child: Stack(
+          children: [
+            // Rank badge positioned in top-left
+            Positioned(
+              top: 6,
+              left: 6,
+              child: Container(
+                width: 18,
+                height: 18,
                 decoration: BoxDecoration(
-                  color: widget.rank <= 3
-                      ? Colors.amber.withOpacity(0.3)
-                      : Colors.white.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.8),
                   shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey[600]!, width: 1),
                 ),
                 child: Center(
                   child: Text(
                     widget.rank.toString(),
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 8,
                     ),
                   ),
                 ),
               ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      widget.track['title'] ?? 'Unknown Track',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            ),
+            // Loading indicator
+            Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.track['artist'] ?? 'Unknown Artist',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                      widget.rank <= 3
-                          ? Colors.amber.withOpacity(0.7)
-                          : Colors.white.withOpacity(0.7)
                   ),
-                ),
+                  SizedBox(width: 6),
+                  Text(
+                    'Loading...',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
 
     return Container(
-      height: 80,
-      margin: EdgeInsets.symmetric(horizontal: 12),
+      height: 85,
+      margin: EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey[700]!, width: 1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[800]!, width: 1),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: WebViewWidget(controller: _webViewController),
+      child: Stack(
+        children: [
+          // WebView
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: WebViewWidget(controller: _webViewController),
+          ),
+          // Rank badge positioned in top-left
+          Positioned(
+            top: 6,
+            left: 6,
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.8),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey[600]!, width: 1),
+              ),
+              child: Center(
+                child: Text(
+                  widget.rank.toString(),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 8,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -566,108 +477,38 @@ class _Top10MusicCardState extends State<Top10MusicCard>
       },
       child: Container(
         key: ValueKey(uniqueKey),
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: widget.rank <= 3
-                ? [
-              Colors.grey[850]!,
-              Colors.grey[900]!,
-              Colors.black,
-            ]
-                : [
-              Colors.grey[900]!,
-              Colors.black,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: widget.rank <= 3
-                ? Colors.amber.withOpacity(0.3)
-                : Colors.grey[700]!,
-            width: widget.rank <= 3 ? 2 : 1,
-          ),
+          color: Colors.grey[900],
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: widget.rank <= 3
-                  ? Colors.amber.withOpacity(0.1)
-                  : Colors.black.withOpacity(0.3),
-              blurRadius: widget.rank <= 3 ? 12 : 6,
-              offset: Offset(0, widget.rank <= 3 ? 4 : 2),
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 4,
+              offset: Offset(0, 2),
             ),
           ],
         ),
         child: Column(
           children: [
-            // Header with rank and track info
-            Container(
-              padding: EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  _buildRankBadge(),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.track['title'] ?? 'Unknown Track',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: widget.track['artist'] ?? 'Unknown Artist',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              TextSpan(
-                                text: ' • ',
-                                style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 14,
-                                ),
-                              ),
-                              TextSpan(
-                                text: widget.track['category'] ?? 'Unknown',
-                                style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
             // Spotify Embed Section
             _buildWebViewSection(),
 
-            // Action Buttons - Responsive Layout
+            // Action Buttons - Ultra compact
             Container(
-              padding: EdgeInsets.all(12),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.grey[850],
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(10),
+                  bottomRight: Radius.circular(10),
+                ),
+                border: Border(
+                  top: BorderSide(color: Colors.grey[700]!, width: 0.5),
+                ),
+              ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   // Like Button
                   if (widget.userId != null)
@@ -675,21 +516,16 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                       child: GestureDetector(
                         onTap: _toggleLike,
                         child: Container(
-                          margin: EdgeInsets.only(right: 6),
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          margin: EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(
-                            color: _isLikedByUser() ? Colors.red.withOpacity(0.15) : Colors.grey[700],
-                            borderRadius: BorderRadius.circular(20),
+                            color: _isLikedByUser()
+                                ? Colors.red.withOpacity(0.15)
+                                : Colors.grey[700]?.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(8),
                             border: _isLikedByUser()
                                 ? Border.all(color: Colors.red.withOpacity(0.4), width: 1)
-                                : null,
-                            boxShadow: _isLikedByUser() ? [
-                              BoxShadow(
-                                color: Colors.red.withOpacity(0.3),
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              ),
-                            ] : null,
+                                : Border.all(color: Colors.grey[600]!, width: 0.5),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -697,16 +533,16 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                             children: [
                               Icon(
                                 _isLikedByUser() ? Icons.favorite : Icons.favorite_border,
-                                color: _isLikedByUser() ? Colors.red : Colors.white,
-                                size: 16,
+                                color: _isLikedByUser() ? Colors.red : Colors.white70,
+                                size: 12,
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 3),
                               Text(
                                 '${widget.track['likes'] ?? 0}',
                                 style: TextStyle(
-                                  color: _isLikedByUser() ? Colors.red : Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                  color: _isLikedByUser() ? Colors.red : Colors.white70,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
@@ -721,33 +557,30 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                       child: GestureDetector(
                         onTap: _showAddToPlaylistDialog,
                         child: Container(
-                          margin: EdgeInsets.symmetric(horizontal: 3),
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          margin: EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(
                             color: Colors.blue.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.withOpacity(0.2),
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.playlist_add, color: Colors.blue, size: 16),
-                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.playlist_add,
+                                color: Colors.blue,
+                                size: 12,
+                              ),
+                              const SizedBox(width: 3),
                               Flexible(
                                 child: Text(
-                                  'Lista',
+                                  'Add to Playlist',
                                   style: TextStyle(
                                     color: Colors.blue,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -764,11 +597,11 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                       child: GestureDetector(
                         onTap: _launchBeatportUrl,
                         child: Container(
-                          margin: EdgeInsets.only(left: 6),
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          margin: EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(
                             color: Colors.orange.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1),
                           ),
                           child: Row(
@@ -777,17 +610,17 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                             children: [
                               Image.asset(
                                 'assets/beatport_logo.png',
-                                width: 14,
-                                height: 14,
+                                width: 10,
+                                height: 10,
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 3),
                               Flexible(
                                 child: Text(
-                                  'Buy',
+                                  'Buy on Beatport',
                                   style: TextStyle(
                                     color: Colors.orange,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -808,7 +641,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
 
   @override
   void dispose() {
-    _animationController.dispose();
     super.dispose();
   }
 }

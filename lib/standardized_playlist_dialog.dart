@@ -48,10 +48,9 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
   List<Map<String, dynamic>> userPlaylists = [];
   bool isLoading = true;
 
-  // Nullable animation controller - initialize edilene kadar null
-  AnimationController? _animationController;
-  Animation<double>? _slideAnimation;
-  Animation<double>? _fadeAnimation;
+  late AnimationController _animationController;
+  late Animation<double> _slideAnimation;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
@@ -62,7 +61,7 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
 
   @override
   void dispose() {
-    _animationController?.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -76,7 +75,7 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
       begin: 1.0,
       end: 0.0,
     ).animate(CurvedAnimation(
-      parent: _animationController!,
+      parent: _animationController,
       curve: Curves.easeOutCubic,
     ));
 
@@ -84,11 +83,11 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(
-      parent: _animationController!,
+      parent: _animationController,
       curve: Curves.easeOut,
     ));
 
-    _animationController!.forward();
+    _animationController.forward();
   }
 
   Future<void> _loadUserPlaylists() async {
@@ -145,7 +144,7 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
       final responseData = json.decode(response.body);
       _showSnackBar(
         responseData['message'] ?? 'Added to playlist successfully',
-        response.statusCode == 200 ? Colors.white : Colors.red,
+        response.statusCode == 200 ? Colors.green : Colors.red,
       );
 
       if (response.statusCode == 200) {
@@ -159,7 +158,7 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
 
   Future<void> _navigateToCreatePlaylist() async {
     try {
-      await _animationController?.reverse();
+      await _animationController.reverse();
       final result = await Navigator.push<bool>(
         context,
         PageRouteBuilder(
@@ -182,7 +181,7 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
       );
 
       if (result == true) {
-        _showSnackBar('Playlist created successfully!', Colors.white);
+        _showSnackBar('Playlist created successfully!', Colors.green);
         await _loadUserPlaylists();
         widget.onPlaylistUpdated?.call();
       }
@@ -199,8 +198,8 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
         content: Row(
           children: [
             Icon(
-              backgroundColor == Colors.white ? Icons.check_circle : Icons.error_outline,
-              color: backgroundColor == Colors.white ? Colors.green : Colors.white,
+              backgroundColor == Colors.green ? Icons.check_circle : Icons.error_outline,
+              color: Colors.white,
               size: 20,
             ),
             SizedBox(width: 8),
@@ -208,14 +207,14 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
               child: Text(
                 message,
                 style: TextStyle(
-                  color: backgroundColor == Colors.white ? Colors.black : Colors.white,
+                  color: Colors.white,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
           ],
         ),
-        backgroundColor: backgroundColor == Colors.white ? Colors.grey[100] : backgroundColor,
+        backgroundColor: backgroundColor,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 3),
         margin: EdgeInsets.all(16),
@@ -229,33 +228,26 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 16, 8, 16),
+      padding: EdgeInsets.fromLTRB(20, 12, 12, 20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+        color: Colors.black,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Row(
         children: [
           Container(
             padding: EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.grey[800],
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               Icons.playlist_add_rounded,
               color: Colors.white,
-              size: 24,
+              size: 20,
             ),
           ),
-          SizedBox(width: 16),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,18 +255,16 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
                 Text(
                   'Add to Playlist',
                   style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
                   'Choose or create a playlist',
                   style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
+                    color: Colors.grey[400],
+                    fontSize: 13,
                   ),
                 ),
               ],
@@ -282,13 +272,13 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
           ),
           Container(
             decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.grey[800],
+              borderRadius: BorderRadius.circular(8),
             ),
             child: IconButton(
-              icon: Icon(Icons.close_rounded, color: Colors.grey[700], size: 20),
+              icon: Icon(Icons.close, color: Colors.grey[300], size: 18),
               onPressed: () => Navigator.of(context).pop(),
-              splashRadius: 20,
+              splashRadius: 18,
             ),
           ),
         ],
@@ -298,32 +288,25 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
 
   Widget _buildTrackInfo() {
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      padding: EdgeInsets.all(16),
+      margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!, width: 1),
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[800]!, width: 1),
       ),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
+              color: Colors.grey[700],
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.music_note_rounded, color: Colors.white, size: 24),
+            child: Icon(Icons.music_note, color: Colors.white, size: 20),
           ),
-          SizedBox(width: 16),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,10 +314,9 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
                 Text(
                   widget.track['title'] ?? 'Unknown Track',
                   style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -343,9 +325,8 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
                 Text(
                   widget.track['artist'] ?? 'Unknown Artist',
                   style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
+                    color: Colors.grey[400],
+                    fontSize: 12,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -354,18 +335,17 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
             ),
           ),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey[700],
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
               widget.track['category']?.toString().toUpperCase() ?? 'MUSIC',
               style: TextStyle(
-                color: Colors.grey[700],
-                fontSize: 10,
+                color: Colors.grey[300],
+                fontSize: 9,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
               ),
             ),
           ),
@@ -376,26 +356,25 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
 
   Widget _buildLoadingState() {
     return Container(
-      height: 200,
+      height: 120,
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 40,
-              height: 40,
+            SizedBox(
+              width: 24,
+              height: 24,
               child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
               ),
             ),
-            SizedBox(height: 16),
+            SizedBox(height: 12),
             Text(
               'Loading playlists...',
               style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                color: Colors.grey[400],
+                fontSize: 12,
               ),
             ),
           ],
@@ -407,39 +386,38 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
   Widget _buildPlaylistList() {
     if (userPlaylists.isEmpty) {
       return Container(
-        padding: EdgeInsets.all(32),
+        padding: EdgeInsets.all(24),
         child: Column(
           children: [
             Container(
-              width: 64,
-              height: 64,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(16),
+                color: Colors.grey[800],
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 Icons.playlist_play_rounded,
                 color: Colors.grey[400],
-                size: 32,
+                size: 24,
               ),
             ),
-            SizedBox(height: 16),
+            SizedBox(height: 12),
             Text(
               'No playlists yet',
               style: TextStyle(
-                color: Colors.grey[700],
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+                color: Colors.grey[300],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
             SizedBox(height: 4),
             Text(
-              'Create your first playlist to get started',
+              'Create your first playlist',
               style: TextStyle(
                 color: Colors.grey[500],
-                fontSize: 14,
+                fontSize: 12,
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -450,14 +428,13 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(24, 8, 24, 16),
+          padding: EdgeInsets.fromLTRB(20, 8, 20, 12),
           child: Text(
             'Your Playlists (${userPlaylists.length})',
             style: TextStyle(
-              color: Colors.black,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.3,
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
@@ -467,7 +444,7 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
           ),
           child: ListView.separated(
             shrinkWrap: true,
-            padding: EdgeInsets.symmetric(horizontal: 24),
+            padding: EdgeInsets.symmetric(horizontal: 20),
             itemCount: userPlaylists.length,
             separatorBuilder: (context, index) => SizedBox(height: 8),
             itemBuilder: (context, index) {
@@ -483,16 +460,9 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
   Widget _buildPlaylistTile(Map<String, dynamic> playlist, int index) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey[800]!, width: 1),
       ),
       child: Material(
         color: Colors.transparent,
@@ -501,32 +471,25 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
             _addToExistingPlaylist(playlist['_id']);
             Navigator.of(context).pop();
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(10),
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.all(12),
             child: Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: _getPlaylistColor(index),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _getPlaylistColor(index).withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     Icons.queue_music_rounded,
                     color: Colors.white,
-                    size: 24,
+                    size: 18,
                   ),
                 ),
-                SizedBox(width: 16),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -534,10 +497,9 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
                       Text(
                         playlist['name'] ?? 'Untitled',
                         style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.2,
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -548,31 +510,29 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
                           Text(
                             '${playlist['musicCount'] ?? 0} songs',
                             style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
+                              color: Colors.grey[400],
+                              fontSize: 11,
                             ),
                           ),
                           Text(
                             ' • ',
                             style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 13,
+                              color: Colors.grey[500],
+                              fontSize: 11,
                             ),
                           ),
                           Container(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                             decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(4),
+                              color: Colors.grey[700],
+                              borderRadius: BorderRadius.circular(3),
                             ),
                             child: Text(
                               playlist['genre']?.toString().toUpperCase() ?? 'MUSIC',
                               style: TextStyle(
-                                color: Colors.grey[700],
-                                fontSize: 9,
+                                color: Colors.grey[300],
+                                fontSize: 8,
                                 fontWeight: FontWeight.w600,
-                                letterSpacing: 0.5,
                               ),
                             ),
                           ),
@@ -582,16 +542,16 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
                   ),
                 ),
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey[700],
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(
-                    Icons.add_rounded,
+                    Icons.add,
                     color: Colors.white,
-                    size: 18,
+                    size: 14,
                   ),
                 ),
               ],
@@ -604,28 +564,22 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
 
   Color _getPlaylistColor(int index) {
     final colors = [
-      Colors.black,
-      Colors.grey[800]!,
       Colors.grey[700]!,
       Colors.grey[600]!,
-      Colors.black87,
+      Colors.grey[500]!,
+      Colors.grey[700]!,
+      Colors.grey[600]!,
     ];
     return colors[index % colors.length];
   }
 
   Widget _buildCreatePlaylistButton() {
     return Container(
-      margin: EdgeInsets.fromLTRB(24, 16, 24, 8),
+      margin: EdgeInsets.fromLTRB(20, 12, 20, 8),
       decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
+        color: Colors.grey[800],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[700]!, width: 1),
       ),
       child: Material(
         color: Colors.transparent,
@@ -634,26 +588,25 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
             Navigator.of(context).pop();
             _navigateToCreatePlaylist();
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Container(
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.all(16),
             child: Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    Icons.add_rounded,
-                    color: Colors.white,
-                    size: 24,
+                    Icons.add,
+                    color: Colors.black,
+                    size: 18,
                   ),
                 ),
-                SizedBox(width: 16),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -662,27 +615,25 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
                         'Create New Playlist',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.2,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       SizedBox(height: 2),
                       Text(
                         'Add this song to a new playlist',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
+                          color: Colors.grey[400],
+                          fontSize: 11,
                         ),
                       ),
                     ],
                   ),
                 ),
                 Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  color: Colors.white.withOpacity(0.7),
-                  size: 16,
+                  Icons.arrow_forward_ios,
+                  color: Colors.grey[400],
+                  size: 12,
                 ),
               ],
             ),
@@ -694,103 +645,33 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
 
   @override
   Widget build(BuildContext context) {
-    // Animation controller henüz initialize edilmemişse basit bir container döndür
-    if (_animationController == null || _slideAnimation == null || _fadeAnimation == null) {
-      return Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-          minHeight: 300,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.grey[50],
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: Offset(0, -5),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              margin: EdgeInsets.only(top: 12, bottom: 8),
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-
-            // Header
-            _buildHeader(),
-
-            // Track info
-            _buildTrackInfo(),
-
-            // Content
-            if (isLoading)
-              _buildLoadingState()
-            else
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildPlaylistList(),
-                      if (userPlaylists.isNotEmpty)
-                        Container(
-                          margin: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                          height: 1,
-                          color: Colors.grey[200],
-                        ),
-                      _buildCreatePlaylistButton(),
-                      SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-
     return AnimatedBuilder(
-      animation: _animationController!,
+      animation: _animationController,
       builder: (context, child) {
         return Transform.translate(
-          offset: Offset(0, MediaQuery.of(context).size.height * _slideAnimation!.value),
+          offset: Offset(0, MediaQuery.of(context).size.height * _slideAnimation.value),
           child: Opacity(
-            opacity: _fadeAnimation!.value,
+            opacity: _fadeAnimation.value,
             child: Container(
               constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.9,
-                minHeight: 300,
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
+                minHeight: 280,
               ),
               decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: Offset(0, -5),
-                  ),
-                ],
+                color: Colors.black,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                border: Border.all(color: Colors.grey[800]!, width: 1),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Handle bar
                   Container(
-                    margin: EdgeInsets.only(top: 12, bottom: 8),
-                    width: 36,
-                    height: 4,
+                    margin: EdgeInsets.only(top: 8, bottom: 4),
+                    width: 32,
+                    height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.grey[300],
+                      color: Colors.grey[600],
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -812,12 +693,12 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
                             _buildPlaylistList(),
                             if (userPlaylists.isNotEmpty)
                               Container(
-                                margin: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                                margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                                 height: 1,
-                                color: Colors.grey[200],
+                                color: Colors.grey[800],
                               ),
                             _buildCreatePlaylistButton(),
-                            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+                            SizedBox(height: MediaQuery.of(context).padding.bottom + 12),
                           ],
                         ),
                       ),

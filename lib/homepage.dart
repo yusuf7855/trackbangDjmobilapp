@@ -495,7 +495,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final categories = [
-      {'key': 'all', 'title': 'Overall Top 10'},
+      {'key': 'all', 'title': 'Trackbang Top 10'},
       {'key': 'afrohouse', 'title': 'Afro House'},
       {'key': 'indiedance', 'title': 'Indie Dance'},
       {'key': 'organichouse', 'title': 'Organic House'},
@@ -523,84 +523,76 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildCategorySection(String title, List<dynamic> tracks) {
+    // Category icon mapping
+    IconData getCategoryIcon(String title) {
+      if (title.toLowerCase().contains('overall')) return Icons.music_note;
+      if (title.toLowerCase().contains('afro')) return Icons.music_note;
+      if (title.toLowerCase().contains('indie')) return Icons.music_note;
+      if (title.toLowerCase().contains('organic')) return Icons.music_note;
+      if (title.toLowerCase().contains('tempo')) return Icons.music_note;
+      if (title.toLowerCase().contains('melodic')) return Icons.music_note;
+      return Icons.queue_music;
+    }
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 32),
+      margin: const EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section Header
+          // Modern category header
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.grey[850]!,
-                  Colors.grey[900]!,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey[700]!, width: 1),
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[800]!, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
                 Container(
-                  padding: EdgeInsets.all(12),
+                  padding: EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.amber, Colors.orange],
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.amber.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.trending_up, color: Colors.white, size: 28),
+                  child: Icon(
+                    getCategoryIcon(title),
+                    color: Colors.black,
+                    size: 18,
+                  ),
                 ),
-                SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Most Liked Tracks',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'TOP ${tracks.length}',
+                    '${tracks.length}',
                     style: TextStyle(
-                      color: Colors.amber,
+                      color: Colors.grey[300],
                       fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -608,9 +600,9 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // Top 10 Music Cards with preloading
+          // Music cards
           ...tracks.asMap().entries.map((entry) {
             final index = entry.key;
             final track = entry.value;
@@ -622,7 +614,7 @@ class _HomeScreenState extends State<HomeScreen>
               userId: userId,
               webViewKey: trackId,
               onWebViewLoaded: _onTop10WebViewLoaded,
-              preloadWebView: true, // Enable preloading
+              preloadWebView: true,
               onLikeChanged: () {
                 _loadTop10Data();
               },
@@ -632,7 +624,6 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
-
   // World tab uses the separate WorldPage
   Widget _buildWorldTab() {
     return WorldPage(userId: userId);
