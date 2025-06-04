@@ -15,6 +15,7 @@ class CreatePlaylistPage extends StatefulWidget {
 
 class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   String _selectedGenre = 'afrohouse';
   bool _isPublic = false;
   bool _isLoading = false;
@@ -43,12 +44,12 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
 
   Future<void> _createPlaylist() async {
     if (_userId == null) {
-      _showSnackBar('Please login to create a playlist');
+      _showSnackBar('Giriş yapmanız gerekiyor');
       return;
     }
 
-    if (_nameController.text.isEmpty) {
-      _showSnackBar('Please enter a playlist name');
+    if (_nameController.text.trim().isEmpty) {
+      _showSnackBar('Lütfen playlist adı girin');
       return;
     }
 
@@ -58,48 +59,93 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
+      if (token == null) {
+        _showSnackBar('Oturum süresi dolmuş. Tekrar giriş yapın.');
+        return;
+      }
+
+      print('Creating playlist with data:');
+      print('- Name: ${_nameController.text.trim()}');
+      print('- Genre: $_selectedGenre');
+      print('- Is Public: $_isPublic');
+      print('- Initial Music ID: ${widget.initialMusicId}');
+      print('- User ID: $_userId');
+
+      final requestBody = {
+        'name': _nameController.text.trim(),
+        'description': '', // Boş description
+        'genre': _selectedGenre,
+        'isPublic': _isPublic,
+      };
+
+      // Eğer başlangıç müziği varsa ekle
+      if (widget.initialMusicId != null && widget.initialMusicId!.isNotEmpty) {
+        requestBody['musicId'] = widget.initialMusicId as Object;
+      }
+
+      print('Request body: ${json.encode(requestBody)}');
+
       final response = await http.post(
         Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: json.encode({
-          'name': _nameController.text,
-          'musicId': widget.initialMusicId,
-          'genre': _selectedGenre,
-          'isPublic': _isPublic,
-        }),
+        body: json.encode(requestBody),
       );
 
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
       if (response.statusCode == 201) {
+        final responseData = json.decode(response.body);
         if (mounted) {
           Navigator.of(context).pop(true);
-          // Show success message in the previous screen
+          // Success message will be shown in the calling screen
         }
       } else {
-        final error = json.decode(response.body)['message'] ?? 'Failed to create playlist';
+        final errorData = json.decode(response.body);
+        final error = errorData['message'] ?? 'Playlist oluşturulamadı';
         _showSnackBar(error);
+        print('Create playlist error: $error');
       }
     } catch (e) {
-      _showSnackBar('Error: ${e.toString()}');
+      print('Exception creating playlist: $e');
+      _showSnackBar('Hata: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message, style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.grey[800],
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: Colors.white,
+              size: 20,
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
-        duration: Duration(seconds: 2),
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -114,34 +160,24 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
         margin: EdgeInsets.only(right: 8, bottom: 8),
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(colors: [Colors.blue, Colors.purple])
-              : null,
-          color: isSelected ? null : Colors.grey[800],
+          color: isSelected ? Colors.white : Colors.grey[800],
           borderRadius: BorderRadius.circular(25),
           border: Border.all(
-            color: isSelected ? Colors.transparent : Colors.grey[600]!,
+            color: isSelected ? Colors.white : Colors.grey[600]!,
             width: 1,
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: Colors.blue.withOpacity(0.3),
-              blurRadius: 8,
-              offset: Offset(0, 4),
-            ),
-          ] : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isSelected) ...[
-              Icon(Icons.check_circle, color: Colors.white, size: 16),
+              Icon(Icons.check_circle, color: Colors.black, size: 16),
               SizedBox(width: 6),
             ],
             Text(
               genre['display']!,
               style: TextStyle(
-                color: Colors.white,
+                color: isSelected ? Colors.black : Colors.white,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 fontSize: 14,
               ),
@@ -160,7 +196,7 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
         backgroundColor: Colors.black,
         elevation: 0,
         title: const Text(
-          'Create New Playlist',
+          'Yeni Playlist Oluştur',
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
@@ -168,16 +204,6 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
           ),
         ),
         iconTheme: IconThemeData(color: Colors.white),
-        actions: [
-          if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
@@ -189,14 +215,7 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
               width: double.infinity,
               padding: EdgeInsets.all(24),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.grey[850]!,
-                    Colors.grey[900]!,
-                  ],
-                ),
+                color: Colors.grey[900],
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey[700]!, width: 1),
               ),
@@ -205,14 +224,14 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                   Container(
                     padding: EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [Colors.blue, Colors.purple]),
+                      color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.playlist_add, color: Colors.white, size: 32),
+                    child: Icon(Icons.playlist_add, color: Colors.black, size: 32),
                   ),
                   SizedBox(height: 16),
                   Text(
-                    'Create Your Playlist',
+                    'Playlist Oluştur',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -221,7 +240,7 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Build your perfect music collection',
+                    'Kendi müzik koleksiyonunu oluştur',
                     style: TextStyle(
                       color: Colors.grey[400],
                       fontSize: 14,
@@ -235,7 +254,7 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
 
             // Playlist Name Section
             Text(
-              'PLAYLIST NAME',
+              'PLAYLIST ADI',
               style: TextStyle(
                 color: Colors.grey[400],
                 fontSize: 12,
@@ -256,9 +275,44 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                  hintText: 'Enter playlist name',
+                  hintText: 'Playlist adını girin',
                   hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
                   prefixIcon: Icon(Icons.music_note, color: Colors.grey[500]),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Description Section
+            Text(
+              'AÇIKLAMA (İSTEĞE BAĞLI)',
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[800],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[600]!, width: 1),
+              ),
+              child: TextField(
+                controller: _descriptionController,
+                style: TextStyle(color: Colors.white, fontSize: 16),
+                maxLines: 3,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                  hintText: 'Playlist hakkında kısa bir açıklama',
+                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
+                  prefixIcon: Padding(
+                    padding: EdgeInsets.only(top: 18),
+                    child: Icon(Icons.description, color: Colors.grey[500]),
+                  ),
                 ),
               ),
             ),
@@ -266,7 +320,7 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
 
             // Genre Section
             Text(
-              'GENRE',
+              'TÜR',
               style: TextStyle(
                 color: Colors.grey[400],
                 fontSize: 12,
@@ -298,7 +352,7 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                     ),
                     SizedBox(width: 12),
                     Text(
-                      'Public Playlist',
+                      'Herkese Açık Playlist',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -311,8 +365,8 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                   padding: EdgeInsets.only(left: 32, top: 4),
                   child: Text(
                     _isPublic
-                        ? 'Everyone can see and listen to this playlist'
-                        : 'Only you can see this playlist',
+                        ? 'Herkes bu playlist\'i görebilir ve dinleyebilir'
+                        : 'Sadece siz bu playlist\'i görebilirsiniz',
                     style: TextStyle(
                       color: Colors.grey[400],
                       fontSize: 13,
@@ -333,23 +387,13 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
               width: double.infinity,
               height: 56,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Colors.blue, Colors.purple],
-                ),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: Offset(0, 6),
-                  ),
-                ],
+                border: Border.all(color: Colors.grey[300]!, width: 1),
               ),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
+                  backgroundColor: Colors.white,
                   shadowColor: Colors.transparent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -365,26 +409,26 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                         ),
                       ),
                       SizedBox(width: 12),
                       Text(
-                        'CREATING...',
+                        'OLUŞTURULUYOR...',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: Colors.black,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1,
                         ),
                       ),
                     ] else ...[
-                      Icon(Icons.add_circle_outline, color: Colors.white, size: 24),
+                      Icon(Icons.add_circle_outline, color: Colors.black, size: 24),
                       SizedBox(width: 12),
                       Text(
-                        'CREATE PLAYLIST',
+                        'PLAYLIST OLUŞTUR',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: Colors.black,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1,
@@ -395,6 +439,7 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
                 ),
               ),
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -404,6 +449,7 @@ class _CreatePlaylistPageState extends State<CreatePlaylistPage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 }

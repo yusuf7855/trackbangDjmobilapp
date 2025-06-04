@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import './url_constants.dart';
+import './standardized_playlist_dialog.dart';
+import './create_playlist.dart';
 
 class Top10MusicCard extends StatefulWidget {
   final Map<String, dynamic> track;
@@ -13,7 +15,7 @@ class Top10MusicCard extends StatefulWidget {
   final VoidCallback? onLikeChanged;
   final String? webViewKey;
   final Function(String)? onWebViewLoaded;
-  final bool preloadWebView; // Yeni parametre
+  final bool preloadWebView;
 
   const Top10MusicCard({
     Key? key,
@@ -23,7 +25,7 @@ class Top10MusicCard extends StatefulWidget {
     this.onLikeChanged,
     this.webViewKey,
     this.onWebViewLoaded,
-    this.preloadWebView = false, // Default false
+    this.preloadWebView = false,
   }) : super(key: key);
 
   @override
@@ -35,7 +37,7 @@ class _Top10MusicCardState extends State<Top10MusicCard>
 
   late WebViewController _webViewController;
   bool _isWebViewInitialized = false;
-  bool _isWebViewLoaded = false; // WebView tam yüklenme durumu
+  bool _isWebViewLoaded = false;
   List<Map<String, dynamic>> userPlaylists = [];
   late AnimationController _animationController;
   late Animation<double> _pulseAnimation;
@@ -49,7 +51,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
     super.initState();
     _initializeAnimation();
 
-    // Preload durumunda hemen WebView'ı başlat
     if (widget.preloadWebView) {
       _initializeWebView();
     }
@@ -65,13 +66,13 @@ class _Top10MusicCardState extends State<Top10MusicCard>
 
     final newSpotifyId = widget.track['spotifyId']?.toString();
     if (newSpotifyId != _currentSpotifyId) {
-      print('Spotify ID changed from $_currentSpotifyId to $newSpotifyId - Reloading WebView');
-      _isWebViewLoaded = false; // Reset loaded state
+      print('Top10MusicCard: Spotify ID changed from $_currentSpotifyId to $newSpotifyId - Reloading WebView');
+      _isWebViewLoaded = false;
       _initializeWebView();
     }
 
     if (oldWidget.rank != widget.rank) {
-      print('Rank changed from ${oldWidget.rank} to ${widget.rank}');
+      print('Top10MusicCard: Rank changed from ${oldWidget.rank} to ${widget.rank}');
       _restartPulseAnimation();
     }
   }
@@ -107,7 +108,7 @@ class _Top10MusicCardState extends State<Top10MusicCard>
 
   void _initializeWebView() {
     final spotifyId = widget.track['spotifyId']?.toString();
-    print('Initializing WebView for track: ${widget.track['title']} with Spotify ID: $spotifyId');
+    print('Top10MusicCard: Initializing WebView for track: ${widget.track['title']} with Spotify ID: $spotifyId');
 
     if (spotifyId != null && spotifyId.isNotEmpty) {
       _currentSpotifyId = spotifyId;
@@ -119,21 +120,18 @@ class _Top10MusicCardState extends State<Top10MusicCard>
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageStarted: (url) {
-              print('WebView started loading: $url');
+              print('Top10MusicCard WebView started loading: $url');
             },
             onPageFinished: (url) async {
-              print('WebView loaded: $url for track: ${widget.track['title']}');
+              print('Top10MusicCard WebView loaded: $url for track: ${widget.track['title']}');
 
-              // CSS ve JavaScript optimizasyonları
               await _webViewController.runJavaScript('''
                 (function() {
-                  // Remove any existing styles
-                  var existingStyle = document.getElementById('custom-style');
+                  var existingStyle = document.getElementById('top10-custom-style');
                   if (existingStyle) existingStyle.remove();
                   
-                  // Add optimized styles
                   var style = document.createElement('style');
-                  style.id = 'custom-style';
+                  style.id = 'top10-custom-style';
                   style.innerHTML = `
                     * { 
                       -webkit-transform: translateZ(0); 
@@ -158,35 +156,32 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                   `;
                   document.head.appendChild(style);
                   
-                  // Wait for iframe to be fully loaded
                   setTimeout(function() {
                     var iframe = document.querySelector('iframe');
                     if (iframe) {
                       iframe.onload = function() {
-                        console.log('Iframe fully loaded');
+                        console.log('Top10MusicCard Iframe fully loaded');
                       };
                     }
                   }, 500);
                 })();
               ''');
 
-              // WebView tam yüklendiğinde state'i güncelle
               if (mounted) {
                 setState(() {
                   _isWebViewLoaded = true;
                 });
               }
 
-              // Callback'i çağır
               if (widget.webViewKey != null && widget.onWebViewLoaded != null) {
                 widget.onWebViewLoaded!(widget.webViewKey!);
               }
             },
             onWebResourceError: (error) {
-              print('WebView error: ${error.description}');
+              print('Top10MusicCard WebView error: ${error.description}');
               if (mounted) {
                 setState(() {
-                  _isWebViewLoaded = true; // Hata durumunda da yüklenmiş say
+                  _isWebViewLoaded = true;
                 });
               }
               if (widget.webViewKey != null && widget.onWebViewLoaded != null) {
@@ -215,7 +210,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
     }
   }
 
-  // Lazy loading için WebView'ı manuel başlatma
   void startWebViewLoading() {
     if (!_isWebViewInitialized && !widget.preloadWebView) {
       _initializeWebView();
@@ -301,160 +295,14 @@ class _Top10MusicCardState extends State<Top10MusicCard>
   }
 
   void _showAddToPlaylistDialog() {
-    showModalBottomSheet(
+    StandardizedPlaylistDialog.show(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.grey[900]!,
-              Colors.black,
-            ],
-          ),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Add to Playlist',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.close, color: Colors.white70),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            if (userPlaylists.isNotEmpty) ...[
-              Text(
-                'Your Playlists',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Container(
-                constraints: BoxConstraints(maxHeight: 250),
-                decoration: BoxDecoration(
-                  color: Colors.grey[800]?.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.grey[600]!, width: 0.5),
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: userPlaylists.length,
-                  itemBuilder: (context, index) {
-                    final playlist = userPlaylists[index];
-                    return Container(
-                      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.grey[700]?.withOpacity(0.5),
-                      ),
-                      child: ListTile(
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        leading: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.blue, Colors.purple],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(Icons.playlist_play, color: Colors.white, size: 24),
-                        ),
-                        title: Text(
-                          playlist['name'] ?? 'Untitled',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "${playlist['musicCount']} songs • ${playlist['genre'] ?? 'Unknown'}",
-                          style: TextStyle(color: Colors.grey[400], fontSize: 13),
-                        ),
-                        trailing: Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.add, color: Colors.white, size: 20),
-                        ),
-                        onTap: () {
-                          _addToExistingPlaylist(playlist['_id']);
-                          Navigator.of(context).pop();
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 20),
-              Divider(color: Colors.grey[600]),
-              const SizedBox(height: 16),
-            ],
-
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.green, Colors.teal],
-                ),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: ListTile(
-                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                leading: Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.add, color: Colors.white, size: 24),
-                ),
-                title: Text(
-                  'Create New Playlist',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                subtitle: Text(
-                  'Add this song to a new playlist',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _navigateToCreatePlaylist();
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+      track: widget.track,
+      userId: widget.userId,
+      onPlaylistUpdated: () {
+        _loadUserPlaylists();
+        widget.onLikeChanged?.call();
+      },
     );
   }
 
@@ -490,7 +338,22 @@ class _Top10MusicCardState extends State<Top10MusicCard>
   }
 
   Future<void> _navigateToCreatePlaylist() async {
-    _showSnackBar('Create playlist feature available in main music section', Colors.blue);
+    try {
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CreatePlaylistPage(initialMusicId: widget.track['_id']),
+        ),
+      );
+
+      if (result == true) {
+        _showSnackBar('Playlist created successfully!', Colors.green);
+        await _loadUserPlaylists();
+        widget.onLikeChanged?.call();
+      }
+    } catch (e) {
+      _showSnackBar('Error creating playlist: $e', Colors.red);
+    }
   }
 
   void _showSnackBar(String message, Color backgroundColor) {
@@ -517,17 +380,17 @@ class _Top10MusicCardState extends State<Top10MusicCard>
       hasGlow = true;
       switch (widget.rank) {
         case 1:
-          badgeColor = Color(0xFFFFD700);
+          badgeColor = Color(0xFFFFD700); // Gold
           textColor = Colors.black;
           icon = Icons.emoji_events;
           break;
         case 2:
-          badgeColor = Color(0xFFC0C0C0);
+          badgeColor = Color(0xFFC0C0C0); // Silver
           textColor = Colors.black;
           icon = Icons.emoji_events;
           break;
         case 3:
-          badgeColor = Color(0xFFCD7F32);
+          badgeColor = Color(0xFFCD7F32); // Bronze
           textColor = Colors.white;
           icon = Icons.emoji_events;
           break;
@@ -588,7 +451,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
   }
 
   Widget _buildWebViewSection() {
-    // WebView tamamen yüklenmemiş ise şık placeholder göster
     if (!_isWebViewInitialized || !_isWebViewLoaded) {
       return Container(
         height: 80,
@@ -609,7 +471,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              // Rank badge mini version
               Container(
                 width: 32,
                 height: 32,
@@ -631,7 +492,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                 ),
               ),
               SizedBox(width: 12),
-              // Track info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -660,7 +520,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                   ],
                 ),
               ),
-              // Loading indicator
               SizedBox(
                 width: 16,
                 height: 16,
@@ -679,7 +538,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
       );
     }
 
-    // WebView tamamen yüklendi - direkt göster
     return Container(
       height: 80,
       margin: EdgeInsets.symmetric(horizontal: 12),
@@ -702,7 +560,6 @@ class _Top10MusicCardState extends State<Top10MusicCard>
 
     return GestureDetector(
       onTap: () {
-        // Lazy loading için WebView'ı başlat
         if (!_isWebViewInitialized) {
           startWebViewLoading();
         }
@@ -807,100 +664,136 @@ class _Top10MusicCardState extends State<Top10MusicCard>
             // Spotify Embed Section
             _buildWebViewSection(),
 
-            // Action Buttons
+            // Action Buttons - Responsive Layout
             Container(
               padding: EdgeInsets.all(12),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   // Like Button
                   if (widget.userId != null)
-                    GestureDetector(
-                      onTap: _toggleLike,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _isLikedByUser() ? Colors.red : Colors.grey[700],
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: _isLikedByUser() ? [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(0.3),
-                              blurRadius: 6,
-                              offset: Offset(0, 2),
-                            ),
-                          ] : null,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _isLikedByUser() ? Icons.favorite : Icons.favorite_border,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${widget.track['likes'] ?? 0}',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _toggleLike,
+                        child: Container(
+                          margin: EdgeInsets.only(right: 6),
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _isLikedByUser() ? Colors.red.withOpacity(0.15) : Colors.grey[700],
+                            borderRadius: BorderRadius.circular(20),
+                            border: _isLikedByUser()
+                                ? Border.all(color: Colors.red.withOpacity(0.4), width: 1)
+                                : null,
+                            boxShadow: _isLikedByUser() ? [
+                              BoxShadow(
+                                color: Colors.red.withOpacity(0.3),
+                                blurRadius: 6,
+                                offset: Offset(0, 2),
                               ),
-                            ),
-                          ],
+                            ] : null,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _isLikedByUser() ? Icons.favorite : Icons.favorite_border,
+                                color: _isLikedByUser() ? Colors.red : Colors.white,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${widget.track['likes'] ?? 0}',
+                                style: TextStyle(
+                                  color: _isLikedByUser() ? Colors.red : Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
 
                   // Add to Playlist Button
                   if (widget.userId != null)
-                    GestureDetector(
-                      onTap: _showAddToPlaylistDialog,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.blue.withOpacity(0.3),
-                              blurRadius: 6,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _showAddToPlaylistDialog,
+                        child: Container(
+                          margin: EdgeInsets.symmetric(horizontal: 3),
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withOpacity(0.2),
+                                blurRadius: 6,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.playlist_add, color: Colors.blue, size: 16),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  'Lista',
+                                  style: TextStyle(
+                                    color: Colors.blue,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: Icon(Icons.playlist_add, color: Colors.white, size: 18),
                       ),
                     ),
 
                   // Beatport Button
                   if (widget.track['beatportUrl']?.isNotEmpty == true)
-                    GestureDetector(
-                      onTap: _launchBeatportUrl,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[700],
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Image.asset(
-                              'assets/beatport_logo.png',
-                              width: 16,
-                              height: 16,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Beatport',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _launchBeatportUrl,
+                        child: Container(
+                          margin: EdgeInsets.only(left: 6),
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                'assets/beatport_logo.png',
+                                width: 14,
+                                height: 14,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  'Buy',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
