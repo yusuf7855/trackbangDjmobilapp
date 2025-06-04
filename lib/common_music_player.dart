@@ -558,9 +558,9 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
             // Spotify Embed Section
             _buildWebViewSection(),
 
-            // MODERN COMPACT ACTION BAR
+            // MODERN COMPACT ACTION BAR - GÜNCELLENMIŞ
             Container(
-              height: 44, // Kompakt yükseklik
+              height: 50, // Yükseklik artırıldı
               padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.grey[850],
@@ -573,137 +573,110 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                 ),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Like Button - Sol taraf
-                  GestureDetector(
-                    onTap: widget.userId != null ? _toggleLike : null,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _isLikedByUser()
-                            ? Colors.red.withOpacity(0.2)
-                            : Colors.grey[700]?.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(14),
-                        border: _isLikedByUser()
-                            ? Border.all(color: Colors.red.withOpacity(0.4), width: 1)
-                            : Border.all(color: Colors.grey[600]!, width: 0.5),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _isLikedByUser() ? Icons.favorite : Icons.favorite_border,
-                            color: _isLikedByUser() ? Colors.red : Colors.white70,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${widget.track['likes'] ?? 0}',
-                            style: TextStyle(
+                  // Like Button
+                  if (widget.userId != null)
+                    GestureDetector(
+                      onTap: _toggleLike,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _isLikedByUser()
+                              ? Colors.red.withOpacity(0.2)
+                              : Colors.grey[700]?.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(14),
+                          border: _isLikedByUser()
+                              ? Border.all(color: Colors.red.withOpacity(0.4), width: 1)
+                              : Border.all(color: Colors.grey[600]!, width: 0.5),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isLikedByUser() ? Icons.favorite : Icons.favorite_border,
                               color: _isLikedByUser() ? Colors.red : Colors.white70,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
+                              size: 14,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              '${widget.track['likes'] ?? 0}',
+                              style: TextStyle(
+                                color: _isLikedByUser() ? Colors.red : Colors.white70,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  // Spacer - Merkez için
-                  Expanded(child: SizedBox()),
-
-                  // Center Buttons
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Add to Playlist Button - MERKEZİ KONUM
-                      if (widget.userId != null)
-                        GestureDetector(
-                          onTap: _showAddToPlaylistDialog,
-                          child: Container(
-                            padding: EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.15),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+                  // Add to Playlist Button
+                  if (widget.userId != null)
+                    GestureDetector(
+                      onTap: _showAddToPlaylistDialog,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.playlist_add,
+                              color: Colors.blue,
+                              size: 14,
                             ),
-                            child: Icon(
-                                Icons.playlist_add,
+                            const SizedBox(width: 4),
+                            Text(
+                              'Çalma listesine ekle',
+                              style: TextStyle(
                                 color: Colors.blue,
-                                size: 16
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-
-                      // Beatport Button
-                      if (widget.track['beatportUrl']?.isNotEmpty == true) ...[
-                        SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: _launchBeatportUrl,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Image.asset(
-                                  'assets/beatport_logo.png',
-                                  width: 10,
-                                  height: 10,
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  'Buy',
-                                  style: TextStyle(
-                                    color: Colors.orange,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-
-                  // Spacer - Sağ dengeleme
-                  Expanded(child: SizedBox()),
-
-                  // Category Badge - Sağ taraf
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[700]?.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.music_note,
-                          color: Colors.white60,
-                          size: 10,
+
+                  // Beatport Button
+                  if (widget.track['beatportUrl']?.isNotEmpty == true)
+                    GestureDetector(
+                      onTap: _launchBeatportUrl,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1),
                         ),
-                        SizedBox(width: 2),
-                        Text(
-                          widget.track['category']?.toString().toUpperCase() ?? 'TRACK',
-                          style: TextStyle(
-                            color: Colors.white60,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Image.asset(
+                              'assets/beatport_logo.png',
+                              width: 12,
+                              height: 12,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Buy on Beatport',
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
