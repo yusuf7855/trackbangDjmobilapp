@@ -462,7 +462,7 @@ class _HotPageState extends State<HotPage>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Hot Playlsits',
+                            'Hot Playlists',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 24,

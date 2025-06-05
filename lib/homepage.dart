@@ -20,6 +20,10 @@ import './common_music_player.dart';
 import './top10_music_card.dart';
 
 class HomeScreen extends StatefulWidget {
+  final VoidCallback? onMenuPressed; // Menu butonuna basılınca çağrılacak fonksiyon
+
+  const HomeScreen({Key? key, this.onMenuPressed}) : super(key: key);
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
@@ -241,6 +245,17 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => LoginPage()),
+          (Route<dynamic> route) => false,
+    );
+  }
+
   // Loading animation widget
   Widget _buildLoadingAnimation() {
     return Center(
@@ -290,119 +305,6 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ],
       ),
-    );
-  }
-
-  // Drawer builder
-  Widget _buildDrawer() {
-    return Drawer(
-      backgroundColor: Colors.black,
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-            ),
-            child: Image.asset(
-              'assets/your_logo.png',
-              height: 60,
-              fit: BoxFit.contain,
-            ),
-          ),
-          _buildDrawerItem(
-            icon: Icons.list,
-            title: 'Listeler',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ListelerScreen()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.library_music,
-            title: 'Samplebank',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SampleBankScreen()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.headset,
-            title: 'Mostening',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => MosteningScreen()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.store,
-            title: 'Mağaza',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => MagazaScreen()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.info,
-            title: 'Biz Kimiz',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => BizKimizScreen()),
-              );
-            },
-          ),
-          Divider(color: Colors.grey[700]),
-          _buildDrawerItem(
-            icon: Icons.logout,
-            title: 'Çıkış Yap',
-            onTap: () async {
-              Navigator.pop(context);
-              await _logout();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.white),
-      title: Text(
-        title,
-        style: TextStyle(color: Colors.white),
-      ),
-      onTap: onTap,
-      contentPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-    );
-  }
-
-  Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => LoginPage()),
-          (Route<dynamic> route) => false,
     );
   }
 
@@ -739,10 +641,10 @@ class _HomeScreenState extends State<HomeScreen>
         automaticallyImplyLeading: false, // Default leading'i kapat
         title: Row(
           children: [
-            // Menu button
+            // Menu button - MainHomePage'deki drawer'ı açacak
             IconButton(
               icon: Icon(Icons.menu, color: Colors.white, size: 28),
-              onPressed: () => Scaffold.of(context).openDrawer(),
+              onPressed: widget.onMenuPressed, // Parent'tan gelen fonksiyonu çağır
               padding: EdgeInsets.zero, // Padding'i kaldır
             ),
 
@@ -787,7 +689,6 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
       ),
-      drawer: _buildDrawer(),
       body: TabBarView(
         controller: _tabController,
         children: [

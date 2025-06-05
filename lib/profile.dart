@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'playlist_card.dart';
+import 'profile_playlist_card.dart'; // YENİ IMPORT
 import './url_constants.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -93,9 +93,14 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     if (mounted) {
       setState(() {
         authToken = prefs.getString('auth_token');
-        currentUserId = prefs.getString('user_id');
+        currentUserId = prefs.getString('userId') ?? prefs.getString('user_id');
       });
     }
+  }
+
+  // YENİ: Current user kontrolü
+  bool get isCurrentUser {
+    return currentUserId == userData?['_id'];
   }
 
   void _populateFormFields() {
@@ -198,11 +203,18 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         'name': playlist['name']?.toString() ?? 'Untitled Playlist',
         'description': playlist['description']?.toString() ?? '',
         'musicCount': playlist['musicCount'] ?? 0,
+        'genre': playlist['genre']?.toString() ?? 'unknown',
+        'isPublic': playlist['isPublic'] ?? false,
         'musics': (playlist['musics'] as List<dynamic>?)?.map((music) {
           return {
+            '_id': music['_id']?.toString(),
             'title': music['title']?.toString(),
             'artist': music['artist']?.toString(),
             'spotifyId': music['spotifyId']?.toString(),
+            'category': music['category']?.toString(),
+            'likes': music['likes'] ?? 0,
+            'userLikes': music['userLikes'] ?? [],
+            'beatportUrl': music['beatportUrl']?.toString() ?? '',
           };
         }).toList() ?? [],
       };
@@ -511,8 +523,15 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     }
   }
 
+  // YENİ: Playlist değişiklikleri için güncellenen handler
   void _handleExpansionChanged(int index, bool expanded) {
     if (!mounted) return;
+
+    // Eğer -1 index gelirse (playlist silindi), sayfayı yenile
+    if (index == -1) {
+      fetchPlaylists();
+      return;
+    }
 
     if (expanded) {
       _cleanupPreviousWebViews(index);
@@ -589,7 +608,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                           backgroundImage: _getProfileImage(),
                         ),
                       ),
-                      if (currentUserId == userData?['_id'] && !isEditing)
+                      if (isCurrentUser && !isEditing)
                         Positioned(
                           bottom: 0,
                           right: 0,
@@ -674,8 +693,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             ],
           ),
 
-
-
           // Linkler
           if (_profileLinks.isNotEmpty)
             Column(
@@ -714,19 +731,16 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               }).toList(),
             ),
 
-
-
           // Buton: Takip / Profili Düzenle
           Center(
-            child: currentUserId != userData?['_id']
-                ? _buildFollowButton()
-                : _buildEditButton(),
+            child: isCurrentUser
+                ? _buildEditButton()
+                : _buildFollowButton(),
           ),
         ],
       ),
     );
   }
-
 
   Widget _buildCompactStat(int count, String label) {
     return Column(
@@ -824,7 +838,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: const EdgeInsets.all(9),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -926,6 +939,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       ),
     );
   }
+
   Widget _buildEventsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1674,6 +1688,58 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
+  // YENİ: Güncellenmiş playlist section - ProfilePlaylistCard kullanımı
+  Widget _buildPlaylistsSection() {
+    return Column(
+      children: [
+        if (playlists.isEmpty)
+          _buildEmptyPlaylistMessage()
+        else
+          ...playlists.asMap().entries.map((entry) =>
+              ProfilePlaylistCard(
+                playlist: entry.value,
+                index: entry.key,
+                currentlyExpandedIndex: currentlyExpandedIndex,
+                onExpansionChanged: _handleExpansionChanged,
+                activeWebViews: activeWebViews,
+                cachedWebViews: {},
+                isCurrentUser: isCurrentUser, // Mevcut kullanıcı kontrolü
+                onPlaylistUpdated: fetchPlaylists, // Playlist güncellendiğinde yenile
+              ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyPlaylistMessage() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[800]!, width: 1),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.library_music_outlined,
+            color: Colors.grey[600],
+            size: 48,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "Henüz playlist oluşturulmamış",
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -1696,7 +1762,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     // Ana profil header
                     _buildProfileHeader(),
                     const SizedBox(height: 16),
-
 
                     // Fotoğraf galerisi
                     _buildPhotoGallery(),
@@ -1832,56 +1897,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildPlaylistsSection() {
-    return Column(
-      children: [
-        if (playlists.isEmpty)
-          _buildEmptyPlaylistMessage()
-        else
-          ...playlists.asMap().entries.map((entry) => Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: PlaylistCard(
-              playlist: entry.value,
-              index: entry.key,
-              currentlyExpandedIndex: currentlyExpandedIndex,
-              onExpansionChanged: _handleExpansionChanged,
-              activeWebViews: activeWebViews,
-              cachedWebViews: {},
-            ),
-          )),
-      ],
-    );
-  }
-
-  Widget _buildEmptyPlaylistMessage() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.library_music_outlined,
-            color: Colors.grey[600],
-            size: 48,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            "Henüz playlist oluşturulmamış",
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 16,
-            ),
-          ),
-        ],
       ),
     );
   }

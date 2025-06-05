@@ -82,17 +82,25 @@ class MainHomePage extends StatefulWidget {
 class _MainHomePageState extends State<MainHomePage> {
   int _currentIndex = 0;
   String? userId;
-  final List<Widget> _pages = [
-    HomeScreen(),
-    SearchScreen(),
-    MyBangsScreen(),
-    ProfileScreen(),
-  ];
+
+  // Scaffold key'i drawer kontrolü için
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  late List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
     _loadUserId();
+
+    // HomeScreen'e drawer'ı açma fonksiyonunu geçiyoruz
+    _pages = [
+      HomeScreen(onMenuPressed: _openDrawer),
+      SearchScreen(),
+      MyBangsScreen(),
+      ProfileScreen(),
+    ];
+
     debugPrint('MainHomePage initialized');
   }
 
@@ -101,6 +109,11 @@ class _MainHomePageState extends State<MainHomePage> {
     setState(() {
       userId = prefs.getString('userId') ?? prefs.getString('user_id');
     });
+  }
+
+  // Drawer'ı açma fonksiyonu
+  void _openDrawer() {
+    _scaffoldKey.currentState?.openDrawer();
   }
 
   Future<void> _logout() async {
@@ -127,8 +140,10 @@ class _MainHomePageState extends State<MainHomePage> {
         return true;
       },
       child: Scaffold(
+        key: _scaffoldKey, // Scaffold key eklendi
         backgroundColor: Colors.black,
         appBar: _buildAppBar(),
+        drawer: _currentIndex == 0 ? _buildDrawer() : null, // Sadece ana sayfada drawer göster
         body: IndexedStack(
           index: _currentIndex,
           children: _pages,
@@ -139,7 +154,7 @@ class _MainHomePageState extends State<MainHomePage> {
   }
 
   PreferredSizeWidget? _buildAppBar() {
-    // Only show AppBar for non-home pages since HomeScreen has its own AppBar
+    // HomeScreen kendi AppBar'ını yönetsin
     if (_currentIndex == 0) return null;
 
     String title;
@@ -172,6 +187,93 @@ class _MainHomePageState extends State<MainHomePage> {
             onPressed: _logout,
           ),
       ],
+    );
+  }
+
+  // Drawer widget'ını buraya taşıdık
+  Widget _buildDrawer() {
+    return Drawer(
+      backgroundColor: Colors.black,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+            ),
+            child: Image.asset(
+              'assets/your_logo.png',
+              height: 60,
+              fit: BoxFit.contain,
+            ),
+          ),
+          _buildDrawerItem(
+            icon: Icons.list,
+            title: 'Listeler',
+            onTap: () {
+              Navigator.pop(context);
+              // Listeler sayfasına git
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.library_music,
+            title: 'Samplebank',
+            onTap: () {
+              Navigator.pop(context);
+              // Samplebank sayfasına git
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.headset,
+            title: 'Mostening',
+            onTap: () {
+              Navigator.pop(context);
+              // Mostening sayfasına git
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.store,
+            title: 'Mağaza',
+            onTap: () {
+              Navigator.pop(context);
+              // Mağaza sayfasına git
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.info,
+            title: 'Biz Kimiz',
+            onTap: () {
+              Navigator.pop(context);
+              // Biz Kimiz sayfasına git
+            },
+          ),
+          Divider(color: Colors.grey[700]),
+          _buildDrawerItem(
+            icon: Icons.logout,
+            title: 'Çıkış Yap',
+            onTap: () async {
+              Navigator.pop(context);
+              await _logout();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Text(
+        title,
+        style: TextStyle(color: Colors.white),
+      ),
+      onTap: onTap,
+      contentPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 4),
     );
   }
 
