@@ -1,6 +1,7 @@
 import 'package:djmobilapp/profile.dart';
 import 'package:djmobilapp/register_page.dart';
 import 'package:djmobilapp/search_screen.dart';
+import 'package:djmobilapp/hot_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';

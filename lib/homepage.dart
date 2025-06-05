@@ -14,6 +14,7 @@ import './menu/mostening_screen.dart';
 import './menu/magaza_screen.dart';
 import './menu/biz_kimiz_screen.dart';
 import './world_page.dart';
+import './hot_page.dart';
 import './login_page.dart';
 import './common_music_player.dart';
 import './top10_music_card.dart';
@@ -31,23 +32,16 @@ class _HomeScreenState extends State<HomeScreen>
   // Data for different tabs
   Map<String, List<dynamic>> top10Data = {};
   List<dynamic> housePlaylists = [];
-  List<dynamic> hotPlaylists = [];
   List<dynamic> userPlaylists = [];
 
   // Loading states
   bool isLoadingTop10 = true;
   bool isLoadingHouse = true;
-  bool isLoadingHot = true;
 
   // Preloading management for Top10
   final Map<String, bool> _top10WebViewLoadedStatus = {};
   final Set<String> _allTop10TrackIds = {};
   bool _allTop10WebViewsLoaded = false;
-
-  // Preloading management for Hot playlists
-  final Map<String, List<Widget>> _preloadedHotMusicPlayers = {};
-  final Map<String, bool> _hotPlaylistPreloadStatus = {};
-  final Map<String, bool> _hotExpandedStates = {};
 
   // Animation controller for loading
   late AnimationController _loadingAnimationController;
@@ -98,7 +92,6 @@ class _HomeScreenState extends State<HomeScreen>
     await Future.wait([
       _loadTop10Data(),
       _loadHousePlaylists(),
-      _loadHotPlaylists(),
     ]);
 
     if (userId != null) {
@@ -245,81 +238,6 @@ class _HomeScreenState extends State<HomeScreen>
           isLoadingHouse = false;
         });
       }
-    }
-  }
-
-  Future<void> _loadHotPlaylists() async {
-    try {
-      final response = await http.get(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/hot?isActive=true'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (mounted) {
-          final playlists = data['hots'] ?? [];
-
-          // Preload hot playlist music players
-          await _preloadHotPlaylistMusicPlayers(playlists);
-
-          setState(() {
-            hotPlaylists = playlists;
-            isLoadingHot = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          isLoadingHot = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _preloadHotPlaylistMusicPlayers(List<dynamic> playlists) async {
-    print('Preloading ${playlists.length} HOT playlists');
-
-    for (final playlist in playlists) {
-      final playlistId = playlist['_id']?.toString();
-      if (playlistId == null) continue;
-
-      // Initialize states
-      _hotExpandedStates[playlistId] = false;
-      _hotPlaylistPreloadStatus[playlistId] = false;
-
-      final musics = playlist['musics'] as List<dynamic>? ?? [];
-      if (musics.isEmpty) {
-        _preloadedHotMusicPlayers[playlistId] = [];
-        _hotPlaylistPreloadStatus[playlistId] = true;
-        continue;
-      }
-
-      // Create CommonMusicPlayer widgets for all tracks with PRELOADING ENABLED
-      final List<Widget> musicPlayers = [];
-
-      for (final music in musics) {
-        final musicPlayer = CommonMusicPlayer(
-          key: ValueKey('hot_${playlistId}_${music['_id'] ?? music['spotifyId']}'),
-          track: music,
-          userId: userId,
-          preloadWebView: true, // PRELOADING AKTİF
-          lazyLoad: false, // LAZY LOADING KAPALI - dropout açıldığında hazır olsun
-          onLikeChanged: () {
-            _loadHotPlaylists();
-          },
-        );
-        musicPlayers.add(musicPlayer);
-      }
-
-      _preloadedHotMusicPlayers[playlistId] = musicPlayers;
-      _hotPlaylistPreloadStatus[playlistId] = true;
-
-      print('Preloaded ${musics.length} tracks for HOT playlist: ${playlist['name']}');
-    }
-
-    if (mounted) {
-      setState(() {});
     }
   }
 
@@ -624,6 +542,7 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
   // World tab uses the separate WorldPage
   Widget _buildWorldTab() {
     return WorldPage(userId: userId);
@@ -673,27 +592,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // Hot tab uses the separate HotPage
   Widget _buildHotTab() {
-    if (isLoadingHot) {
-      return _buildLoadingAnimation();
-    }
-
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: SizedBox(height: 16),
-        ),
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-                (context, index) {
-              final hotPlaylist = hotPlaylists[index];
-              return _buildHotPlaylistCard(hotPlaylist);
-            },
-            childCount: hotPlaylists.length,
-          ),
-        ),
-      ],
-    );
+    return HotPage(userId: userId);
   }
 
   Widget _buildPlaylistCard(Map<String, dynamic> playlist) {
@@ -819,153 +720,6 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               child: Text(
                 'This playlist is empty',
-                style: TextStyle(color: Colors.grey[400]),
-                textAlign: TextAlign.center,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHotPlaylistCard(Map<String, dynamic> hotPlaylist) {
-    final playlistId = hotPlaylist['_id']?.toString() ?? '';
-    final musics = hotPlaylist['musics'] as List<dynamic>? ?? [];
-    final isPreloaded = _hotPlaylistPreloadStatus[playlistId] ?? false;
-    final preloadedPlayers = _preloadedHotMusicPlayers[playlistId] ?? [];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Modern HOT playlist header - minimalist design like Top10
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.withOpacity(0.3), width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.orange.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.orange, Colors.red],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.whatshot,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            hotPlaylist['name'] ?? 'Unnamed HOT Playlist',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                            ),
-                            child: Text(
-                              'HOT',
-                              style: TextStyle(
-                                color: Colors.orange,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        hotPlaylist['category'] ?? 'All Categories',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${musics.length}',
-                    style: TextStyle(
-                      color: Colors.grey[300],
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Music cards - minimalist style like Top10
-          if (isPreloaded && preloadedPlayers.isNotEmpty)
-            ...preloadedPlayers.map((player) => Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: player,
-            )).toList()
-          else if (musics.isEmpty)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[800]!, width: 1),
-              ),
-              child: Text(
-                'This HOT playlist is empty',
                 style: TextStyle(color: Colors.grey[400]),
                 textAlign: TextAlign.center,
               ),
