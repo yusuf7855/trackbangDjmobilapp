@@ -701,68 +701,122 @@ class _HomeScreenState extends State<HomeScreen>
     final owner = playlist['owner'] as Map<String, dynamic>?;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
-      ),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        childrenPadding: EdgeInsets.only(bottom: 16),
-        iconColor: Colors.white,
-        collapsedIconColor: Colors.white70,
-        title: Text(
-          playlist['name'] ?? 'Unnamed Playlist',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            if (owner != null)
-              Text(
-                'by ${owner['displayName'] ?? owner['username']}',
-                style: const TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                Icon(Icons.music_note, color: Colors.grey[400], size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  '${playlist['musicCount'] ?? 0} songs',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-                const SizedBox(width: 12),
-                Icon(Icons.category, color: Colors.grey[400], size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  playlist['genre'] ?? 'Unknown',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Modern playlist header - minimalist design like Top10
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[800]!, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
-          ],
-        ),
-        children: [
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.people,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        playlist['name'] ?? 'Unnamed Playlist',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      if (owner != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'by ${owner['displayName'] ?? owner['username']}',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${musics.length}',
+                    style: TextStyle(
+                      color: Colors.grey[300],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Music cards - minimalist style like Top10
           if (musics.isNotEmpty)
-            ...musics.map((music) => CommonMusicPlayer(
-              track: music,
-              userId: userId,
-              preloadWebView: true, // PRELOADING AKTİF
-              lazyLoad: false, // LAZY LOADING KAPALI
-              onLikeChanged: () {
-                _loadHousePlaylists();
-              },
+            ...musics.map((music) => Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: CommonMusicPlayer(
+                track: music,
+                userId: userId,
+                preloadWebView: true,
+                lazyLoad: false,
+                onLikeChanged: () {
+                  _loadHousePlaylists();
+                },
+              ),
             )).toList()
           else
             Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[800]!, width: 1),
+              ),
               child: Text(
                 'This playlist is empty',
                 style: TextStyle(color: Colors.grey[400]),
@@ -777,90 +831,145 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildHotPlaylistCard(Map<String, dynamic> hotPlaylist) {
     final playlistId = hotPlaylist['_id']?.toString() ?? '';
     final musics = hotPlaylist['musics'] as List<dynamic>? ?? [];
-    final isExpanded = _hotExpandedStates[playlistId] ?? false;
     final isPreloaded = _hotPlaylistPreloadStatus[playlistId] ?? false;
     final preloadedPlayers = _preloadedHotMusicPlayers[playlistId] ?? [];
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.withOpacity(0.3), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.orange.withOpacity(0.1),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ExpansionTile(
-        key: ValueKey(playlistId),
-        tilePadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        childrenPadding: EdgeInsets.only(bottom: 16),
-        iconColor: Colors.orange,
-        collapsedIconColor: Colors.orange.withOpacity(0.7),
-        initiallyExpanded: isExpanded,
-        onExpansionChanged: (expanded) {
-          setState(() {
-            _hotExpandedStates[playlistId] = expanded;
-          });
-        },
-        leading: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.2),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(Icons.whatshot, color: Colors.orange, size: 20),
-        ),
-        title: Text(
-          hotPlaylist['name'] ?? 'Unnamed HOT Playlist',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.music_note, color: Colors.grey[400], size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  '${hotPlaylist['musicCount'] ?? musics.length} songs',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-                const SizedBox(width: 12),
-                Icon(Icons.category, color: Colors.grey[400], size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  hotPlaylist['category'] ?? 'All Categories',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Modern HOT playlist header - minimalist design like Top10
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.withOpacity(0.3), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.orange.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
-          ],
-        ),
-        children: [
-          if (isExpanded) ...[
-            if (isPreloaded && preloadedPlayers.isNotEmpty)
-            // Preload edilmiş player'ları anında göster - tekrar yükleme yok
-              ...preloadedPlayers
-            else if (musics.isEmpty)
-              Container(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'This HOT playlist is empty',
-                  style: TextStyle(color: Colors.grey[400]),
-                  textAlign: TextAlign.center,
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.orange, Colors.red],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.whatshot,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            hotPlaylist['name'] ?? 'Unnamed HOT Playlist',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                            ),
+                            child: Text(
+                              'HOT',
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        hotPlaylist['category'] ?? 'All Categories',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${musics.length}',
+                    style: TextStyle(
+                      color: Colors.grey[300],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Music cards - minimalist style like Top10
+          if (isPreloaded && preloadedPlayers.isNotEmpty)
+            ...preloadedPlayers.map((player) => Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
-          ],
+              child: player,
+            )).toList()
+          else if (musics.isEmpty)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[800]!, width: 1),
+              ),
+              child: Text(
+                'This HOT playlist is empty',
+                style: TextStyle(color: Colors.grey[400]),
+                textAlign: TextAlign.center,
+              ),
+            ),
         ],
       ),
     );
@@ -873,36 +982,43 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: Icon(Icons.menu, color: Colors.white, size: 28),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
+        automaticallyImplyLeading: false, // Default leading'i kapat
         title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/your_logo.png',
-              height: 40,
-              fit: BoxFit.contain,
+            // Menu button
+            IconButton(
+              icon: Icon(Icons.menu, color: Colors.white, size: 28),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+              padding: EdgeInsets.zero, // Padding'i kaldır
+            ),
+
+            // Logo - direkt yanında
+            Container(
+              margin: EdgeInsets.only(left: 4), // Minimal margin
+              child: Image.asset(
+                'assets/your_logo.png',
+                height: 40,
+                fit: BoxFit.contain,
+              ),
+            ),
+
+            Spacer(), // Sağ taraftaki iconları itmek için
+
+            // Actions manually added
+            IconButton(
+              icon: Icon(Icons.notifications_none, color: Colors.white),
+              onPressed: () {
+                // Notification action
+              },
+            ),
+            IconButton(
+              icon: Icon(Icons.message_outlined, color: Colors.white),
+              onPressed: () {
+                // DM action
+              },
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.notifications_none, color: Colors.white),
-            onPressed: () {
-              // Notification action
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.message_outlined, color: Colors.white),
-            onPressed: () {
-              // DM action
-            },
-          ),
-        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,

@@ -582,7 +582,7 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
-                                  'Buy',
+                                  'Buy on Beatport',
                                   style: TextStyle(
                                     color: Colors.orange,
                                     fontSize: 10,

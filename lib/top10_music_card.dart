@@ -367,25 +367,32 @@ class _Top10MusicCardState extends State<Top10MusicCard>
         ),
         child: Stack(
           children: [
-            // Rank badge positioned in top-left
+            // Rank badge positioned in top-left - LOADING STATE
             Positioned(
-              top: 6,
-              left: 6,
+              top: 8,
+              left: 8,
               child: Container(
-                width: 18,
-                height: 18,
+                width: 25,
+                height: 25,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.8),
+                  color: Colors.black.withOpacity(0.9),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.grey[600]!, width: 1),
+                  border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Center(
                   child: Text(
                     widget.rank.toString(),
                     style: TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
                 ),
@@ -434,25 +441,32 @@ class _Top10MusicCardState extends State<Top10MusicCard>
             borderRadius: BorderRadius.circular(8),
             child: WebViewWidget(controller: _webViewController),
           ),
-          // Rank badge positioned in top-left
+          // Rank badge positioned in top-left - LOADED STATE
           Positioned(
-            top: 6,
-            left: 6,
+            top: 8,
+            left: 8,
             child: Container(
-              width: 18,
-              height: 18,
+              width: 25,
+              height: 25,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.8),
+                color: Colors.black.withOpacity(0.9),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey[600]!, width: 1),
+                border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Center(
                 child: Text(
                   widget.rank.toString(),
                   style: TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
               ),
@@ -576,7 +590,7 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                               const SizedBox(width: 3),
                               Flexible(
                                 child: Text(
-                                  'Add to Playlist',
+                                  'Lista',
                                   style: TextStyle(
                                     color: Colors.blue,
                                     fontSize: 9,
@@ -616,7 +630,7 @@ class _Top10MusicCardState extends State<Top10MusicCard>
                               const SizedBox(width: 3),
                               Flexible(
                                 child: Text(
-                                  'Buy on Beatport',
+                                  'Buy',
                                   style: TextStyle(
                                     color: Colors.orange,
                                     fontSize: 9,
