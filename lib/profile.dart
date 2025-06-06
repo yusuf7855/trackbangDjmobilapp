@@ -568,88 +568,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       }
     }
   }
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return _buildLoadingScreen();
-    }
-
-    if (userData == null) {
-      return _buildErrorScreen();
-    }
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return [
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    // Ana profil header
-                    _buildProfileHeader(),
-                    const SizedBox(height: 16),
-
-                    // Fotoğraf galerisi
-                    _buildPhotoGallery(),
-                    const SizedBox(height: 16),
-
-                    // Düzenleme formu
-                    if (isEditing) ...[
-                      _buildEditingForm(),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Tab bar
-                    _buildTabBar(),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ];
-          },
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              // Etkinlikler sekmesi
-              RefreshIndicator(
-                onRefresh: _refreshProfileData, // YENİ: Pull-to-refresh
-                color: Colors.white,
-                backgroundColor: Colors.black,
-                child: SingleChildScrollView(
-                  physics: AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      _buildEventsSection(),
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
-              ),
-              // Playlists sekmesi
-              RefreshIndicator(
-                onRefresh: _refreshProfileData, // YENİ: Pull-to-refresh
-                color: Colors.white,
-                backgroundColor: Colors.black,
-                child: SingleChildScrollView(
-                  physics: AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      _buildPlaylistsSection(),
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   void _cleanupPreviousWebViews(int currentIndex) {
     if (currentlyExpandedIndex != null && currentlyExpandedIndex != currentIndex) {
@@ -688,6 +606,68 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return months[month - 1];
+  }
+
+  Future<void> toggleFollow() async {
+    if (authToken == null || userData == null || !mounted) return;
+
+    try {
+      final endpoint = isFollowing ? 'unfollow' : 'follow';
+      final response = await http.post(
+        Uri.parse('${UrlConstants.apiBaseUrl}/api/$endpoint/${userData!['_id']}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          isFollowing = !isFollowing;
+          followerCount += isFollowing ? 1 : -1;
+        });
+        _showSuccessSnackbar(isFollowing ? "Takip edildi" : "Takip bırakıldı");
+      }
+    } catch (e) {
+      _showErrorSnackbar("Bir hata oluştu: $e");
+    }
+  }
+
+  void _showErrorSnackbar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  void _showSuccessSnackbar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   // Ana profil header
@@ -1735,68 +1715,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  Future<void> toggleFollow() async {
-    if (authToken == null || userData == null || !mounted) return;
-
-    try {
-      final endpoint = isFollowing ? 'unfollow' : 'follow';
-      final response = await http.post(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/$endpoint/${userData!['_id']}'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
-      );
-
-      if (response.statusCode == 200 && mounted) {
-        setState(() {
-          isFollowing = !isFollowing;
-          followerCount += isFollowing ? 1 : -1;
-        });
-        _showSuccessSnackbar(isFollowing ? "Takip edildi" : "Takip bırakıldı");
-      }
-    } catch (e) {
-      _showErrorSnackbar("Bir hata oluştu: $e");
-    }
-  }
-
-  void _showErrorSnackbar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: Colors.red.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-
-  void _showSuccessSnackbar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: Colors.green.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
   // YENİ: Güncellenmiş playlist section - ProfilePlaylistCard kullanımı
   Widget _buildPlaylistsSection() {
     return Column(
@@ -1823,7 +1741,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       ],
     );
   }
-
 
   Widget _buildEmptyPlaylistMessage() {
     return Container(
@@ -1854,88 +1771,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return _buildLoadingScreen();
-    }
-
-    if (userData == null) {
-      return _buildErrorScreen();
-    }
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return [
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    // Ana profil header
-                    _buildProfileHeader(),
-                    const SizedBox(height: 16),
-
-                    // Fotoğraf galerisi
-                    _buildPhotoGallery(),
-                    const SizedBox(height: 16),
-
-                    // Düzenleme formu
-                    if (isEditing) ...[
-                      _buildEditingForm(),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Tab bar
-                    _buildTabBar(),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ];
-          },
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              // Etkinlikler sekmesi
-              RefreshIndicator(
-                onRefresh: _refreshProfileData, // YENİ: Pull-to-refresh
-                color: Colors.white,
-                backgroundColor: Colors.black,
-                child: SingleChildScrollView(
-                  physics: AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      _buildEventsSection(),
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
-              ),
-              // Playlists sekmesi
-              RefreshIndicator(
-                onRefresh: _refreshProfileData, // YENİ: Pull-to-refresh
-                color: Colors.white,
-                backgroundColor: Colors.black,
-                child: SingleChildScrollView(
-                  physics: AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      _buildPlaylistsSection(),
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
   Widget _buildLoadingScreen() {
     return const Scaffold(
       backgroundColor: Colors.black,
@@ -2016,6 +1851,89 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return _buildLoadingScreen();
+    }
+
+    if (userData == null) {
+      return _buildErrorScreen();
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    // Ana profil header
+                    _buildProfileHeader(),
+                    const SizedBox(height: 16),
+
+                    // Fotoğraf galerisi
+                    _buildPhotoGallery(),
+                    const SizedBox(height: 16),
+
+                    // Düzenleme formu
+                    if (isEditing) ...[
+                      _buildEditingForm(),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Tab bar
+                    _buildTabBar(),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ];
+          },
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              // Etkinlikler sekmesi
+              RefreshIndicator(
+                onRefresh: _refreshProfileData,
+                color: Colors.white,
+                backgroundColor: Colors.black,
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      _buildEventsSection(),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+              ),
+              // Playlists sekmesi
+              RefreshIndicator(
+                onRefresh: _refreshProfileData,
+                color: Colors.white,
+                backgroundColor: Colors.black,
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      _buildPlaylistsSection(),
+                      const SizedBox(height: 100),
+                    ],
                   ),
                 ),
               ),
