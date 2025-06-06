@@ -50,6 +50,17 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
     _initializePlaylistMusics();
   }
 
+// BURAYA EKLEYİN ↓
+  @override
+  void didUpdateWidget(ProfilePlaylistCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Playlist verileri değiştiyse local state'i güncelle
+    if (oldWidget.playlist != widget.playlist) {
+      _initializePlaylistMusics();
+    }
+  }
+
   Future<void> _loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -102,6 +113,15 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
 
       if (response.statusCode == 200) {
         _showSnackBar('Playlist güncellendi', Colors.green);
+
+        // YENİ: Playlist verilerini güncelle
+        setState(() {
+          // Local playlist verilerini güncelle
+          widget.playlist['musics'] = List.from(_playlistMusics);
+          widget.playlist['musicCount'] = _playlistMusics.length;
+        });
+
+        // Parent'a güncellendiğini bildir
         widget.onPlaylistUpdated?.call();
       } else {
         final errorData = json.decode(response.body);
@@ -138,8 +158,15 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
               Navigator.pop(context);
               setState(() {
                 _playlistMusics.removeAt(index);
+                // YENİ: Hemen local state'i güncelle
+                widget.playlist['musicCount'] = _playlistMusics.length;
               });
               _showSnackBar('Şarkı kaldırıldı', Colors.orange);
+
+              // YENİ: Parent'a değişikliği bildir
+              Future.delayed(Duration(milliseconds: 300), () {
+                widget.onPlaylistUpdated?.call();
+              });
             },
             child: Text('Kaldır', style: TextStyle(color: Colors.red)),
           ),
@@ -197,8 +224,14 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
 
       if (response.statusCode == 200) {
         _showSnackBar('Playlist silindi', Colors.green);
-        // Üst widget'a playlist silindiğini bildir
+
+        // YENİ: Üst widget'a playlist silindiğini bildir ve hemen yenile
         widget.onExpansionChanged(-1, false); // Refresh signal
+
+        // Biraz bekle ve sonra callback'i çağır
+        Future.delayed(Duration(milliseconds: 500), () {
+          widget.onPlaylistUpdated?.call();
+        });
       } else {
         final errorData = json.decode(response.body);
         _showSnackBar(errorData['message'] ?? 'Silme başarısız', Colors.red);
@@ -211,6 +244,7 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
       });
     }
   }
+
 
   void _showSnackBar(String message, Color backgroundColor) {
     if (!mounted) return;

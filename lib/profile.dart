@@ -529,7 +529,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
     // Eğer -1 index gelirse (playlist silindi), sayfayı yenile
     if (index == -1) {
-      fetchPlaylists();
+      _refreshProfileData(); // YENİ: Tam veri yenileme
       return;
     }
 
@@ -540,6 +540,115 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       _cleanupWebViewsForIndex(index);
       setState(() => currentlyExpandedIndex = null);
     }
+  }
+
+  Future<void> _refreshProfileData() async {
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // Hem profil verilerini hem de playlist'leri yenile
+      await Future.wait([
+        fetchCurrentUser(),
+        fetchPlaylists(),
+      ]);
+
+      // Formu yeniden doldur
+      _populateFormFields();
+    } catch (e) {
+      _showErrorSnackbar("Veriler yenilenirken hata: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return _buildLoadingScreen();
+    }
+
+    if (userData == null) {
+      return _buildErrorScreen();
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    // Ana profil header
+                    _buildProfileHeader(),
+                    const SizedBox(height: 16),
+
+                    // Fotoğraf galerisi
+                    _buildPhotoGallery(),
+                    const SizedBox(height: 16),
+
+                    // Düzenleme formu
+                    if (isEditing) ...[
+                      _buildEditingForm(),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Tab bar
+                    _buildTabBar(),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ];
+          },
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              // Etkinlikler sekmesi
+              RefreshIndicator(
+                onRefresh: _refreshProfileData, // YENİ: Pull-to-refresh
+                color: Colors.white,
+                backgroundColor: Colors.black,
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      _buildEventsSection(),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+              ),
+              // Playlists sekmesi
+              RefreshIndicator(
+                onRefresh: _refreshProfileData, // YENİ: Pull-to-refresh
+                color: Colors.white,
+                backgroundColor: Colors.black,
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      _buildPlaylistsSection(),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _cleanupPreviousWebViews(int currentIndex) {
@@ -1703,13 +1812,18 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 onExpansionChanged: _handleExpansionChanged,
                 activeWebViews: activeWebViews,
                 cachedWebViews: {},
-                isCurrentUser: isCurrentUser, // Mevcut kullanıcı kontrolü
-                onPlaylistUpdated: fetchPlaylists, // Playlist güncellendiğinde yenile
+                isCurrentUser: isCurrentUser,
+                onPlaylistUpdated: () async {
+                  // YENİ: Playlist güncellendiğinde hemen yenile
+                  await fetchPlaylists();
+                  setState(() {}); // UI'ı yeniden çiz
+                },
               ),
           ),
       ],
     );
   }
+
 
   Widget _buildEmptyPlaylistMessage() {
     return Container(
@@ -1785,23 +1899,35 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             controller: _tabController,
             children: [
               // Etkinlikler sekmesi
-              SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    _buildEventsSection(),
-                    const SizedBox(height: 100), // Alt padding
-                  ],
+              RefreshIndicator(
+                onRefresh: _refreshProfileData, // YENİ: Pull-to-refresh
+                color: Colors.white,
+                backgroundColor: Colors.black,
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      _buildEventsSection(),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
                 ),
               ),
               // Playlists sekmesi
-              SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    _buildPlaylistsSection(),
-                    const SizedBox(height: 100), // Alt padding
-                  ],
+              RefreshIndicator(
+                onRefresh: _refreshProfileData, // YENİ: Pull-to-refresh
+                color: Colors.white,
+                backgroundColor: Colors.black,
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      _buildPlaylistsSection(),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1810,7 +1936,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       ),
     );
   }
-
   Widget _buildLoadingScreen() {
     return const Scaffold(
       backgroundColor: Colors.black,
