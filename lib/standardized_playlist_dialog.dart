@@ -156,37 +156,34 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
     }
   }
 
+  // DÜZELTİLEN KISIM: Async/await eksikti ve error handling eklendi
   Future<void> _navigateToCreatePlaylist() async {
     try {
-      await _animationController.reverse();
+      print('Debug: Navigating to create playlist...'); // Debug log
+
+      // Önce mevcut dialog'u kapat
+      Navigator.of(context).pop();
+
+      // Kısa bir gecikme ekle (UI'ın kendini toparlaması için)
+      await Future.delayed(Duration(milliseconds: 100));
+
+      // CreatePlaylistPage'e git
       final result = await Navigator.push<bool>(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              CreatePlaylistPage(initialMusicId: widget.track['_id']),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1.0, 0.0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeInOut,
-              )),
-              child: child,
-            );
-          },
-          transitionDuration: Duration(milliseconds: 300),
+        MaterialPageRoute(
+          builder: (context) => CreatePlaylistPage(initialMusicId: widget.track['_id']),
         ),
       );
 
+      print('Debug: Create playlist result: $result'); // Debug log
+
       if (result == true) {
-        _showSnackBar('Playlist created successfully!', Colors.green);
-        await _loadUserPlaylists();
+        _showSnackBar('Playlist başarıyla oluşturuldu!', Colors.green);
         widget.onPlaylistUpdated?.call();
       }
     } catch (e) {
-      _showSnackBar('Error creating playlist: $e', Colors.red);
+      print('Debug: Error creating playlist: $e'); // Debug log
+      _showSnackBar('Playlist oluşturulurken hata: $e', Colors.red);
     }
   }
 
@@ -584,9 +581,10 @@ class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            Navigator.of(context).pop();
-            _navigateToCreatePlaylist();
+          // DÜZELTİLEN KISIM: onTap fonksiyonu düzeltildi
+          onTap: () async {
+            print('Debug: Create playlist button tapped'); // Debug log
+            await _navigateToCreatePlaylist();
           },
           borderRadius: BorderRadius.circular(12),
           child: Container(
