@@ -2,6 +2,11 @@ import 'package:djmobilapp/profile.dart';
 import 'package:djmobilapp/register_page.dart';
 import 'package:djmobilapp/search_screen.dart';
 import 'package:djmobilapp/hot_page.dart';
+import 'package:djmobilapp/menu/listeler_screen.dart'; // YENİ IMPORT EKLENDİ
+import 'package:djmobilapp/menu/sample_bank_screen.dart'; // YENİ IMPORT EKLENDİ
+import 'package:djmobilapp/menu/mostening_screen.dart'; // YENİ IMPORT EKLENDİ
+import 'package:djmobilapp/menu/magaza_screen.dart'; // YENİ IMPORT EKLENDİ
+import 'package:djmobilapp/menu/biz_kimiz_screen.dart'; // YENİ IMPORT EKLENDİ
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -190,7 +195,7 @@ class _MainHomePageState extends State<MainHomePage> {
     );
   }
 
-  // Drawer widget'ını buraya taşıdık
+  // DÜZELTİLEN DRAWER
   Widget _buildDrawer() {
     return Drawer(
       backgroundColor: Colors.black,
@@ -207,44 +212,60 @@ class _MainHomePageState extends State<MainHomePage> {
               fit: BoxFit.contain,
             ),
           ),
+          // DÜZELTİLEN KISIM: Tüm navigation işlemleri eklendi
           _buildDrawerItem(
             icon: Icons.list,
             title: 'Listeler',
             onTap: () {
-              Navigator.pop(context);
-              // Listeler sayfasına git
+              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ListelerScreen()),
+              );
             },
           ),
           _buildDrawerItem(
             icon: Icons.library_music,
             title: 'Samplebank',
             onTap: () {
-              Navigator.pop(context);
-              // Samplebank sayfasına git
+              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SampleBankScreen()),
+              );
             },
           ),
           _buildDrawerItem(
             icon: Icons.headset,
             title: 'Mostening',
             onTap: () {
-              Navigator.pop(context);
-              // Mostening sayfasına git
+              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => MosteningScreen()),
+              );
             },
           ),
           _buildDrawerItem(
             icon: Icons.store,
             title: 'Mağaza',
             onTap: () {
-              Navigator.pop(context);
-              // Mağaza sayfasına git
+              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => MagazaScreen()),
+              );
             },
           ),
           _buildDrawerItem(
             icon: Icons.info,
             title: 'Biz Kimiz',
             onTap: () {
-              Navigator.pop(context);
-              // Biz Kimiz sayfasına git
+              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => BizKimizScreen()),
+              );
             },
           ),
           Divider(color: Colors.grey[700]),
