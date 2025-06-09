@@ -19,114 +19,347 @@ class _MusicScreenState extends State<MusicScreen>
   List<Map<String, dynamic>> musicList = [];
   bool isLoading = true;
   String? userId;
-  bool _isDisposed = false;
-
-  // Animation
   late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-  late Animation<Color?> _colorAnimation;
+  late Animation<double> _rotationAnimation;
 
-  // Constants
+  // Categories
   final List<String> categories = [
-    'All', 'Afra House', 'Indie Dance',
-    'Organic House', 'Down tempo', 'Melodic House'
+    'All',
+    'afrohouse',
+    'indiedance',
+    'organichouse',
+    'downtempo',
+    'melodichouse'
   ];
+
+  final Map<String, String> categoryDisplayNames = {
+    'All': 'Tüm Kategoriler',
+    'afrohouse': 'Afro House',
+    'indiedance': 'Indie Dance',
+    'organichouse': 'Organic House',
+    'downtempo': 'Down Tempo',
+    'melodichouse': 'Melodic House',
+  };
 
   @override
   void initState() {
     super.initState();
-    _initAnimations();
-    _initializeUser();
-    _fetchMusic();
+    _loadUserId();
+    _initializeAnimation();
+    fetchMusics();
   }
 
-  void _initAnimations() {
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _initializeAnimation() {
     _animationController = AnimationController(
+      duration: Duration(seconds: 2),
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
+    )..repeat();
 
-    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.15).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
-    );
-
-    _colorAnimation = ColorTween(
-      begin: Colors.white.withOpacity(0.8),
-      end: Colors.white,
+    _rotationAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
     ).animate(_animationController);
   }
 
-  Future<void> _initializeUser() async {
+  Future<void> _loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
-    final fetchedUserId = prefs.getString('userId');
-
-    if (!mounted || _isDisposed) return;
-
-    setState(() => userId = fetchedUserId);
-
-    if (userId == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_isDisposed) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => LoginPage()),
-          );
-        }
-      });
-    }
+    setState(() {
+      userId = prefs.getString('userId') ?? prefs.getString('user_id');
+    });
   }
 
-  Future<void> _fetchMusic() async {
+  // Çoklu sanatçı desteği için helper method
+  String _getDisplayArtists(Map<String, dynamic> music) {
+    // 1. displayArtists varsa onu kullan (backend'den gelen hazır format)
+    if (music['displayArtists'] != null &&
+        music['displayArtists'].toString().isNotEmpty) {
+      return music['displayArtists'].toString();
+    }
+
+    // 2. artists array varsa onu birleştir
+    if (music['artists'] != null &&
+        music['artists'] is List &&
+        (music['artists'] as List).isNotEmpty) {
+      final artistsList = music['artists'] as List;
+      return artistsList
+          .where((artist) => artist != null && artist.toString().trim().isNotEmpty)
+          .map((artist) => artist.toString().trim())
+          .join(', ');
+    }
+
+    // 3. Eski tek sanatçı field'i varsa onu kullan (backward compatibility)
+    if (music['artist'] != null &&
+        music['artist'].toString().trim().isNotEmpty) {
+      return music['artist'].toString().trim();
+    }
+
+    // 4. Hiçbiri yoksa default
+    return 'Unknown Artist';
+  }
+
+  Future<void> fetchMusics() async {
+    setState(() {
+      isLoading = true;
+    });
+
     try {
-      final response = await http.get(
-          Uri.parse('${UrlConstants.apiBaseUrl}/api/music'));
+      String endpoint = _selectedCategory == 'All'
+          ? '${UrlConstants.apiBaseUrl}/api/music'
+          : '${UrlConstants.apiBaseUrl}/api/music/category/$_selectedCategory';
+
+      final response = await http.get(Uri.parse(endpoint));
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        if (mounted && !_isDisposed) {
+        final data = json.decode(response.body);
+
+        if (data['success'] == true && mounted) {
           setState(() {
-            musicList = data.map((item) => _mapMusicItem(item)).toList();
+            musicList = List<Map<String, dynamic>>.from(data['music'] ?? []);
             isLoading = false;
           });
-          _animationController.stop();
+        } else {
+          _handleError('Müzikler yüklenemedi');
         }
       } else {
-        throw Exception('Failed to load music');
+        _handleError('Sunucu hatası: ${response.statusCode}');
       }
     } catch (e) {
-      if (mounted && !_isDisposed) {
-        setState(() => isLoading = false);
-        _animationController.stop();
-        _showSnackBar('Error loading music: $e');
-      }
+      _handleError('Bağlantı hatası: $e');
     }
   }
 
-  Map<String, dynamic> _mapMusicItem(dynamic item) {
-    return {
-      'id': item['spotifyId'],
-      'title': item['title'],
-      'artist': item['artist'],
-      'category': item['category'],
-      'likes': item['likes'] ?? 0,
-      '_id': item['_id'],
-      'userLikes': item['userLikes'] ?? [],
-      'beatportUrl': item['beatportUrl'] ?? '',
-      'spotifyId': item['spotifyId'],
-    };
+  void _handleError(String message) {
+    if (mounted) {
+      setState(() {
+        isLoading = false;
+        musicList = [];
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  void _showSnackBar(String message, {bool isError = true}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+  void _onCategorySelected(String category) {
+    setState(() {
+      _selectedCategory = category;
+    });
+    fetchMusics();
+  }
+
+  Widget _buildCategoryChips() {
+    return Container(
+      height: 50,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        itemCount: categories.length,
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          final isSelected = _selectedCategory == category;
+
+          return Container(
+            margin: EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: Text(
+                categoryDisplayNames[category] ?? category,
+                style: TextStyle(
+                  color: isSelected ? Colors.black : Colors.white,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  _onCategorySelected(category);
+                }
+              },
+              backgroundColor: Colors.grey[800],
+              selectedColor: Colors.orange,
+              checkmarkColor: Colors.black,
+              side: BorderSide(
+                color: isSelected ? Colors.orange : Colors.grey[600]!,
+                width: 1,
+              ),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          RotationTransition(
+            turns: _rotationAnimation,
+            child: Icon(
+              Icons.music_note,
+              color: Colors.orange,
+              size: 64,
+            ),
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Müzikler yükleniyor...',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+            ),
+          ),
+          SizedBox(height: 8),
+          LinearProgressIndicator(
+            backgroundColor: Colors.grey[800],
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.music_off,
+            color: Colors.grey[600],
+            size: 64,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Bu kategoride müzik bulunamadı',
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Başka bir kategori deneyin',
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 14,
+            ),
+          ),
+          SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => _onCategorySelected('All'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.black,
+            ),
+            child: Text('Tüm Müzikleri Göster'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMusicList() {
+    if (isLoading) {
+      return _buildLoadingIndicator();
+    }
+
+    if (musicList.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(8),
+      itemCount: musicList.length,
+      itemBuilder: (context, index) {
+        return CommonMusicPlayer(
+          track: musicList[index],
+          userId: userId,
+          lazyLoad: true,
+          onLikeChanged: () {
+            // Beğeni değiştiğinde listeyi yenile
+            fetchMusics();
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStatsHeader() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatCard(
+            'Toplam Müzik',
+            '${musicList.length}',
+            Icons.library_music,
+            Colors.blue,
+          ),
+          _buildStatCard(
+            'Kategori',
+            categoryDisplayNames[_selectedCategory] ?? _selectedCategory,
+            Icons.category,
+            Colors.green,
+          ),
+          _buildStatCard(
+            'Beğeniler',
+            '${_getTotalLikes()}',
+            Icons.favorite,
+            Colors.red,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 24),
+          SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _getTotalLikes() {
+    return musicList.fold(0, (sum, music) => sum + (music['likes'] ?? 0) as int);
   }
 
   @override
@@ -135,166 +368,42 @@ class _MusicScreenState extends State<MusicScreen>
       backgroundColor: Colors.black,
       body: Column(
         children: [
-          _buildCategorySelector(),
+          // Category chips
+          _buildCategoryChips(),
+
+          // Stats header
+          if (!isLoading && musicList.isNotEmpty)
+            _buildStatsHeader(),
+
+          // Music list
           Expanded(
-            child: isLoading
-                ? _buildLoadingAnimation()
-                : _buildMusicContent(),
+            child: RefreshIndicator(
+              onRefresh: fetchMusics,
+              backgroundColor: Colors.grey[900],
+              color: Colors.orange,
+              child: _buildMusicList(),
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildCategorySelector() {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) => _buildCategoryChip(index),
-      ),
-    );
-  }
-
-  Widget _buildCategoryChip(int index) {
-    return ChoiceChip(
-      label: Text(
-        categories[index],
-        style: TextStyle(
-          color: _selectedCategory == categories[index]
-              ? Colors.black
-              : Colors.white,
-        ),
-      ),
-      selected: _selectedCategory == categories[index],
-      selectedColor: Colors.white,
-      backgroundColor: Colors.grey[900],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      onSelected: (selected) => setState(
-              () => _selectedCategory = categories[index]),
-    );
-  }
-
-  Widget _buildLoadingAnimation() {
-    return Center(
-      child: AnimatedBuilder(
-        animation: _animationController,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Text(
-              'B',
-              style: TextStyle(
-                color: _colorAnimation.value,
-                fontSize: 96,
-                fontWeight: FontWeight.bold,
-                fontStyle: FontStyle.italic,
-                shadows: [
-                  Shadow(
-                    color: Colors.white.withOpacity(0.7),
-                    blurRadius: 15,
-                    offset: Offset.zero,
-                  ),
-                ],
-              ),
+      floatingActionButton: userId != null
+          ? FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreatePlaylistPage(),
             ),
-          );
+          ).then((_) {
+            // Playlist oluşturulduktan sonra sayfayı yenile
+            fetchMusics();
+          });
         },
-      ),
+        backgroundColor: Colors.orange,
+        child: Icon(Icons.playlist_add, color: Colors.black),
+        tooltip: 'Yeni Playlist Oluştur',
+      )
+          : null,
     );
-  }
-
-  Widget _buildMusicContent() {
-    final filteredMusic = _getFilteredMusic();
-
-    if (filteredMusic.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.music_off,
-              size: 64,
-              color: Colors.grey[600],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _selectedCategory == 'All'
-                  ? 'No music found'
-                  : 'No music found in $_selectedCategory',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _fetchMusic,
-      color: Colors.white,
-      backgroundColor: Colors.black,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        physics: const BouncingScrollPhysics(),
-        itemCount: filteredMusic.length,
-        itemBuilder: (context, index) {
-          final track = filteredMusic[index];
-          return Container(
-            margin: EdgeInsets.only(bottom: 16),
-            child: CommonMusicPlayer(
-              track: track,
-              userId: userId,
-              onLikeChanged: _fetchMusic,
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  List<Map<String, dynamic>> _getFilteredMusic() {
-    if (_selectedCategory == 'All') {
-      return musicList;
-    }
-
-    // Map category names to match API data
-    String categoryFilter = _selectedCategory;
-    switch (_selectedCategory) {
-      case 'Afra House':
-        categoryFilter = 'afrahouse';
-        break;
-      case 'Indie Dance':
-        categoryFilter = 'indiedance';
-        break;
-      case 'Organic House':
-        categoryFilter = 'organichouse';
-        break;
-      case 'Down tempo':
-        categoryFilter = 'downtempo';
-        break;
-      case 'Melodic House':
-        categoryFilter = 'melodichouse';
-        break;
-    }
-
-    return musicList.where((m) =>
-    m['category']?.toLowerCase() == categoryFilter.toLowerCase()).toList();
-  }
-
-  @override
-  void dispose() {
-    _isDisposed = true;
-    _animationController.stop();
-    _animationController.dispose();
-    super.dispose();
   }
 }

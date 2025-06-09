@@ -3,710 +3,504 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import './url_constants.dart';
-import './create_playlist.dart';
 
-class StandardizedPlaylistDialog {
-  static void show({
-    required BuildContext context,
-    required Map<String, dynamic> track,
-    required String? userId,
-    required VoidCallback? onPlaylistUpdated,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      isDismissible: true,
-      enableDrag: true,
-      builder: (context) => _PlaylistDialogContent(
-        track: track,
-        userId: userId,
-        onPlaylistUpdated: onPlaylistUpdated,
-      ),
-    );
-  }
-}
-
-class _PlaylistDialogContent extends StatefulWidget {
+class StandardizedPlaylistDialog extends StatefulWidget {
   final Map<String, dynamic> track;
   final String? userId;
-  final VoidCallback? onPlaylistUpdated;
+  final List<Map<String, dynamic>> userPlaylists;
+  final VoidCallback? onPlaylistsUpdated;
 
-  const _PlaylistDialogContent({
+  const StandardizedPlaylistDialog({
     Key? key,
     required this.track,
-    required this.userId,
-    required this.onPlaylistUpdated,
+    this.userId,
+    required this.userPlaylists,
+    this.onPlaylistsUpdated,
   }) : super(key: key);
 
   @override
-  State<_PlaylistDialogContent> createState() => _PlaylistDialogContentState();
+  State<StandardizedPlaylistDialog> createState() => _StandardizedPlaylistDialogState();
 }
 
-class _PlaylistDialogContentState extends State<_PlaylistDialogContent>
-    with SingleTickerProviderStateMixin {
-  List<Map<String, dynamic>> userPlaylists = [];
-  bool isLoading = true;
+class _StandardizedPlaylistDialogState extends State<StandardizedPlaylistDialog> {
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _playlists = [];
 
-  late AnimationController _animationController;
-  late Animation<double> _slideAnimation;
-  late Animation<double> _fadeAnimation;
+  // Çoklu sanatçı desteği için helper method
+  String _getDisplayArtists() {
+    // 1. displayArtists varsa onu kullan (backend'den gelen hazır format)
+    if (widget.track['displayArtists'] != null &&
+        widget.track['displayArtists'].toString().isNotEmpty) {
+      return widget.track['displayArtists'].toString();
+    }
+
+    // 2. artists array varsa onu birleştir
+    if (widget.track['artists'] != null &&
+        widget.track['artists'] is List &&
+        (widget.track['artists'] as List).isNotEmpty) {
+      final artistsList = widget.track['artists'] as List;
+      return artistsList
+          .where((artist) => artist != null && artist.toString().trim().isNotEmpty)
+          .map((artist) => artist.toString().trim())
+          .join(', ');
+    }
+
+    // 3. Eski tek sanatçı field'i varsa onu kullan (backward compatibility)
+    if (widget.track['artist'] != null &&
+        widget.track['artist'].toString().trim().isNotEmpty) {
+      return widget.track['artist'].toString().trim();
+    }
+
+    // 4. Hiçbiri yoksa default
+    return 'Unknown Artist';
+  }
 
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
-    _loadUserPlaylists();
+    _playlists = List.from(widget.userPlaylists);
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  void _initializeAnimations() {
-    _animationController = AnimationController(
-      duration: Duration(milliseconds: 300),
-      vsync: this,
-    );
-
-    _slideAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    ));
-
-    _animationController.forward();
-  }
-
-  Future<void> _loadUserPlaylists() async {
+  Future<void> _addToPlaylist(String playlistId, String playlistName) async {
     if (widget.userId == null) {
-      setState(() => isLoading = false);
+      _showSnackBar('Giriş yapmanız gerekiyor', Colors.red);
       return;
     }
 
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      final response = await http.get(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists/user/${widget.userId}'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (mounted && data['success'] == true) {
-          setState(() {
-            userPlaylists = List<Map<String, dynamic>>.from(data['playlists'] ?? []);
-            isLoading = false;
-          });
-        }
-      } else {
-        setState(() => isLoading = false);
+      if (token == null) {
+        _showSnackBar('Oturum süresi dolmuş. Tekrar giriş yapın.', Colors.red);
+        return;
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
-      print('Error loading user playlists: $e');
-    }
-  }
 
-  Future<void> _addToExistingPlaylist(String playlistId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
+      final musicId = widget.track['_id']?.toString() ?? widget.track['id']?.toString();
+      if (musicId == null) {
+        _showSnackBar('Müzik ID\'si bulunamadı', Colors.red);
+        return;
+      }
 
       final response = await http.post(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/music/${widget.track['_id']}/add-to-playlist'),
+        Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists/$playlistId/add-music'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
         body: json.encode({
-          'playlistId': playlistId,
-          'userId': widget.userId,
+          'musicId': musicId,
         }),
       );
 
-      final responseData = json.decode(response.body);
-      _showSnackBar(
-        responseData['message'] ?? 'Added to playlist successfully',
-        response.statusCode == 200 ? Colors.green : Colors.red,
-      );
-
       if (response.statusCode == 200) {
-        await _loadUserPlaylists();
-        widget.onPlaylistUpdated?.call();
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          _showSnackBar('Şarkı "$playlistName" playlist\'ine eklendi', Colors.green);
+          widget.onPlaylistsUpdated?.call();
+          Navigator.of(context).pop();
+        } else {
+          _showSnackBar(data['message'] ?? 'Ekleme başarısız', Colors.red);
+        }
+      } else if (response.statusCode == 409) {
+        final data = json.decode(response.body);
+        _showSnackBar(data['message'] ?? 'Bu şarkı zaten playlist\'te mevcut', Colors.orange);
+      } else {
+        _showSnackBar('Sunucu hatası: ${response.statusCode}', Colors.red);
       }
     } catch (e) {
-      _showSnackBar('Error: ${e.toString()}', Colors.red);
-    }
-  }
-
-  // DÜZELTİLEN KISIM: Async/await eksikti ve error handling eklendi
-  Future<void> _navigateToCreatePlaylist() async {
-    try {
-      print('Debug: Navigating to create playlist...'); // Debug log
-
-      // Önce mevcut dialog'u kapat
-      Navigator.of(context).pop();
-
-      // Kısa bir gecikme ekle (UI'ın kendini toparlaması için)
-      await Future.delayed(Duration(milliseconds: 100));
-
-      // CreatePlaylistPage'e git
-      final result = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => CreatePlaylistPage(initialMusicId: widget.track['_id']),
-        ),
-      );
-
-      print('Debug: Create playlist result: $result'); // Debug log
-
-      if (result == true) {
-        _showSnackBar('Playlist başarıyla oluşturuldu!', Colors.green);
-        widget.onPlaylistUpdated?.call();
+      _showSnackBar('Bağlantı hatası: $e', Colors.red);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
-    } catch (e) {
-      print('Debug: Error creating playlist: $e'); // Debug log
-      _showSnackBar('Playlist oluşturulurken hata: $e', Colors.red);
     }
   }
 
   void _showSnackBar(String message, Color backgroundColor) {
-    if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              backgroundColor == Colors.green ? Icons.check_circle : Icons.error_outline,
-              color: Colors.white,
-              size: 20,
-            ),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
+        content: Text(message),
         backgroundColor: backgroundColor,
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 3),
-        margin: EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        elevation: 8,
+        duration: Duration(seconds: 2),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 12, 12, 20),
-      decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey[800],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.playlist_add_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Add to Playlist',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'Choose or create a playlist',
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[800],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: IconButton(
-              icon: Icon(Icons.close, color: Colors.grey[300], size: 18),
-              onPressed: () => Navigator.of(context).pop(),
-              splashRadius: 18,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _showCreateNewPlaylist() {
+    Navigator.of(context).pop(); // Close current dialog
+
+    // Navigate to create playlist page with this track
+    Navigator.pushNamed(
+      context,
+      '/create_playlist',
+      arguments: {
+        'initialMusicId': widget.track['_id']?.toString() ?? widget.track['id']?.toString(),
+      },
+    ).then((_) {
+      widget.onPlaylistsUpdated?.call();
+    });
   }
 
-  Widget _buildTrackInfo() {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.grey[700],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.music_note, color: Colors.white, size: 20),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.track['title'] ?? 'Unknown Track',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                SizedBox(height: 2),
-                Text(
-                  widget.track['artist'] ?? 'Unknown Artist',
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 12,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.grey[700],
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              widget.track['category']?.toString().toUpperCase() ?? 'MUSIC',
-              style: TextStyle(
-                color: Colors.grey[300],
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  @override
+  Widget build(BuildContext context) {
+    final displayArtists = _getDisplayArtists();
+    final title = widget.track['title']?.toString() ?? 'Unknown Title';
 
-  Widget _buildLoadingState() {
-    return Container(
-      height: 120,
-      child: Center(
+    return Dialog(
+      backgroundColor: Colors.grey[900],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: 600, maxWidth: 400),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-            SizedBox(height: 12),
-            Text(
-              'Loading playlists...',
-              style: TextStyle(
-                color: Colors.grey[400],
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPlaylistList() {
-    if (userPlaylists.isEmpty) {
-      return Container(
-        padding: EdgeInsets.all(24),
-        child: Column(
-          children: [
+            // Header
             Container(
-              width: 48,
-              height: 48,
+              padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.grey[800],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.playlist_play_rounded,
-                color: Colors.grey[400],
-                size: 24,
-              ),
-            ),
-            SizedBox(height: 12),
-            Text(
-              'No playlists yet',
-              style: TextStyle(
-                color: Colors.grey[300],
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Create your first playlist',
-              style: TextStyle(
-                color: Colors.grey[500],
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(20, 8, 20, 12),
-          child: Text(
-            'Your Playlists (${userPlaylists.length})',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.35,
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            itemCount: userPlaylists.length,
-            separatorBuilder: (context, index) => SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final playlist = userPlaylists[index];
-              return _buildPlaylistTile(playlist, index);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPlaylistTile(Map<String, dynamic> playlist, int index) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            _addToExistingPlaylist(playlist['_id']);
-            Navigator.of(context).pop();
-          },
-          borderRadius: BorderRadius.circular(10),
-          child: Padding(
-            padding: EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _getPlaylistColor(index),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.queue_music_rounded,
-                    color: Colors.white,
-                    size: 18,
-                  ),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
                 ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              child: Column(
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        playlist['name'] ?? 'Untitled',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: Icon(
+                          Icons.playlist_add,
+                          color: Colors.orange,
+                          size: 24,
+                        ),
                       ),
-                      SizedBox(height: 2),
-                      Row(
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Playlist\'e Ekle',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Şarkıyı bir playlist\'e ekleyin',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(Icons.close, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+
+                  // Track info
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[850],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.music_note, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                displayArtists,
+                                style: TextStyle(
+                                  color: Colors.grey[400],
+                                  fontSize: 12,
+                                ),
+                                maxLines: 2, // Çoklu sanatçı için 2 satır
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Content
+            Flexible(
+              child: Column(
+                children: [
+                  // Create new playlist option
+                  Container(
+                    margin: EdgeInsets.all(16),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _showCreateNewPlaylist,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.add,
+                                  color: Colors.black,
+                                  size: 20,
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Yeni Playlist Oluştur',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Bu şarkıyla yeni bir playlist oluşturun',
+                                      style: TextStyle(
+                                        color: Colors.grey[400],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                color: Colors.orange,
+                                size: 16,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Existing playlists
+                  if (_playlists.isNotEmpty) ...[
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
                         children: [
                           Text(
-                            '${playlist['musicCount'] ?? 0} songs',
+                            'Mevcut Playlistler',
                             style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 11,
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Text(
-                            ' • ',
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 11,
-                            ),
-                          ),
+                          SizedBox(width: 8),
                           Container(
-                            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: Colors.grey[700],
-                              borderRadius: BorderRadius.circular(3),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              playlist['genre']?.toString().toUpperCase() ?? 'MUSIC',
+                              '${_playlists.length}',
                               style: TextStyle(
-                                color: Colors.grey[300],
-                                fontSize: 8,
-                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[700],
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(
-                    Icons.add,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _getPlaylistColor(int index) {
-    final colors = [
-      Colors.grey[700]!,
-      Colors.grey[600]!,
-      Colors.grey[500]!,
-      Colors.grey[700]!,
-      Colors.grey[600]!,
-    ];
-    return colors[index % colors.length];
-  }
-
-  Widget _buildCreatePlaylistButton() {
-    return Container(
-      margin: EdgeInsets.fromLTRB(20, 12, 20, 8),
-      decoration: BoxDecoration(
-        color: Colors.grey[800],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[700]!, width: 1),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          // DÜZELTİLEN KISIM: onTap fonksiyonu düzeltildi
-          onTap: () async {
-            print('Debug: Create playlist button tapped'); // Debug log
-            await _navigateToCreatePlaylist();
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.add,
-                    color: Colors.black,
-                    size: 18,
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Create New Playlist',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Add this song to a new playlist',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  color: Colors.grey[400],
-                  size: 12,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, MediaQuery.of(context).size.height * _slideAnimation.value),
-          child: Opacity(
-            opacity: _fadeAnimation.value,
-            child: Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.85,
-                minHeight: 280,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                border: Border.all(color: Colors.grey[800]!, width: 1),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Handle bar
-                  Container(
-                    margin: EdgeInsets.only(top: 8, bottom: 4),
-                    width: 32,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[600],
-                      borderRadius: BorderRadius.circular(2),
                     ),
-                  ),
+                    SizedBox(height: 8),
 
-                  // Header
-                  _buildHeader(),
-
-                  // Track info
-                  _buildTrackInfo(),
-
-                  // Content
-                  if (isLoading)
-                    _buildLoadingState()
-                  else
                     Flexible(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            _buildPlaylistList(),
-                            if (userPlaylists.isNotEmpty)
-                              Container(
-                                margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                height: 1,
-                                color: Colors.grey[800],
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _playlists.length,
+                        itemBuilder: (context, index) {
+                          final playlist = _playlists[index];
+                          final isPrivate = playlist['isPublic'] != true;
+
+                          return Container(
+                            margin: EdgeInsets.only(bottom: 8),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _isLoading ? null : () {
+                                  _addToPlaylist(
+                                    playlist['_id']?.toString() ?? '',
+                                    playlist['name']?.toString() ?? 'Unnamed Playlist',
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[850],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isPrivate ? Icons.lock : Icons.queue_music,
+                                        color: isPrivate ? Colors.grey[600] : Colors.blue,
+                                        size: 20,
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              playlist['name']?.toString() ?? 'Unnamed Playlist',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 14,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (playlist['description'] != null &&
+                                                playlist['description'].toString().isNotEmpty) ...[
+                                              Text(
+                                                playlist['description'].toString(),
+                                                style: TextStyle(
+                                                  color: Colors.grey[500],
+                                                  fontSize: 11,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ] else ...[
+                                              Text(
+                                                '${playlist['musicCount'] ?? 0} şarkı',
+                                                style: TextStyle(
+                                                  color: Colors.grey[500],
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      if (_isLoading) ...[
+                                        SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                          ),
+                                        ),
+                                      ] else ...[
+                                        Icon(
+                                          Icons.add_circle_outline,
+                                          color: Colors.grey[400],
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
                               ),
-                            _buildCreatePlaylistButton(),
-                            SizedBox(height: MediaQuery.of(context).padding.bottom + 12),
-                          ],
-                        ),
+                            ),
+                          );
+                        },
                       ),
                     ),
+                  ] else ...[
+                    // No playlists state
+                    Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.playlist_add_outlined,
+                            color: Colors.grey[600],
+                            size: 48,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Henüz playlist\'iniz yok',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'İlk playlist\'inizi oluşturmak için yukarıdaki butona tıklayın',
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 }

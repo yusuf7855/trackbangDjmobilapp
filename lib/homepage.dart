@@ -428,13 +428,11 @@ class _HomeScreenState extends State<HomeScreen>
             final track = entry.value;
             final trackId = track['_id']?.toString() ?? '';
 
-            return Top10MusicCard(
+            return CommonMusicPlayer(
               track: track,
-              rank: index + 1,
               userId: userId,
-              webViewKey: trackId,
-              onWebViewLoaded: _onTop10WebViewLoaded,
               preloadWebView: true,
+              lazyLoad: false,
               onLikeChanged: () {
                 _loadTop10Data();
               },
