@@ -1,159 +1,162 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'user_profile.dart';
 import './url_constants.dart';
-import './user_profile.dart';
 import './common_music_player.dart';
 
 class SearchScreen extends StatefulWidget {
-  final String? userId;
-
-  const SearchScreen({Key? key, this.userId}) : super(key: key);
-
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  _SearchScreenState createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
+class _SearchScreenState extends State<SearchScreen> with TickerProviderStateMixin {
+  // Controllers ve değişkenler
+  TextEditingController searchController = TextEditingController();
+  Timer? _debounce;
+  bool isLoading = false;
+  String? authToken;
+
+  // Tab controller
   late TabController _tabController;
 
-  final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _searchResults = [];
-  List<Map<String, dynamic>> _musicResults = [];
-  List<Map<String, dynamic>> _playlistResults = [];
-  List<Map<String, dynamic>> _userResults = [];
+  // Arama sonuçları
+  Map<String, dynamic> searchResults = {
+    'users': [],
+    'playlists': [],
+    'musics': [],
+    'privatePlaylists': []
+  };
 
-  bool _isLoading = false;
-  bool _hasSearched = false;
-  String _currentQuery = '';
+  // Tab index'leri
+  final Map<String, int> tabIndexes = {
+    'all': 0,
+    'users': 1,
+    'playlists': 2,
+    'musics': 3,
+    'my_playlists': 4
+  };
+
+  // WebView controllers for Spotify embeds
+  Map<String, WebViewController> _webViewControllers = {};
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
+    searchController.addListener(_onSearchChanged);
+    _loadAuthToken();
   }
 
   @override
   void dispose() {
+    searchController.dispose();
+    _debounce?.cancel();
     _tabController.dispose();
-    _searchController.dispose();
+    _disposeWebViews();
     super.dispose();
   }
 
-  // Çoklu sanatçı desteği için helper method
-  String _getDisplayArtists(Map<String, dynamic> music) {
-    // 1. displayArtists varsa onu kullan (backend'den gelen hazır format)
-    if (music['displayArtists'] != null &&
-        music['displayArtists'].toString().isNotEmpty) {
-      return music['displayArtists'].toString();
-    }
+  void _disposeWebViews() {
+    _webViewControllers.clear();
+  }
 
-    // 2. artists array varsa onu birleştir
-    if (music['artists'] != null &&
-        music['artists'] is List &&
-        (music['artists'] as List).isNotEmpty) {
-      final artistsList = music['artists'] as List;
-      return artistsList
-          .where((artist) => artist != null && artist.toString().trim().isNotEmpty)
-          .map((artist) => artist.toString().trim())
-          .join(', ');
-    }
+  Future<void> _loadAuthToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      authToken = prefs.getString('auth_token');
+    });
+  }
 
-    // 3. Eski tek sanatçı field'i varsa onu kullan (backward compatibility)
-    if (music['artist'] != null &&
-        music['artist'].toString().trim().isNotEmpty) {
-      return music['artist'].toString().trim();
-    }
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      final query = searchController.text.trim();
 
-    // 4. Hiçbiri yoksa default
-    return 'Unknown Artist';
+      if (query.isNotEmpty) {
+        _performSearch(query);
+      } else {
+        setState(() {
+          searchResults = {
+            'users': [],
+            'playlists': [],
+            'musics': [],
+            'privatePlaylists': []
+          };
+        });
+      }
+    });
   }
 
   Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) {
-      setState(() {
-        _searchResults.clear();
-        _musicResults.clear();
-        _playlistResults.clear();
-        _userResults.clear();
-        _hasSearched = false;
-        _currentQuery = '';
-      });
-      return;
-    }
+    if (query.trim().isEmpty) return;
 
     setState(() {
-      _isLoading = true;
-      _hasSearched = true;
-      _currentQuery = query;
+      isLoading = true;
     });
 
     try {
-      final response = await http.get(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/search?query=${Uri.encodeComponent(query)}'),
-        headers: {'Content-Type': 'application/json'},
-      );
+      // Ana arama (users, playlists, musics)
+      final mainSearchFuture = _searchAll(query);
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+      // Private playlist arama (sadece giriş yapmış kullanıcılar için)
+      final privateSearchFuture = authToken != null
+          ? _searchPrivatePlaylists(query)
+          : Future.value(<dynamic>[]);
 
-        if (data['success'] == true && mounted) {
-          final results = data['results'] as List<dynamic>? ?? [];
+      final results = await Future.wait([mainSearchFuture, privateSearchFuture]);
 
-          setState(() {
-            _searchResults = List<Map<String, dynamic>>.from(results);
-
-            // Sonuçları türlerine göre ayır
-            _musicResults = _searchResults
-                .where((item) => item['type'] == 'music')
-                .toList();
-            _playlistResults = _searchResults
-                .where((item) => item['type'] == 'playlist')
-                .toList();
-            _userResults = _searchResults
-                .where((item) => item['type'] == 'user')
-                .toList();
-
-            _isLoading = false;
-          });
-        } else {
-          _handleSearchError('Arama sonucu bulunamadı');
-        }
-      } else {
-        _handleSearchError('Arama sırasında hata oluştu');
-      }
-    } catch (e) {
-      _handleSearchError('Bağlantı hatası: $e');
-    }
-  }
-
-  void _handleSearchError(String message) {
-    if (mounted) {
       setState(() {
-        _isLoading = false;
-        _searchResults.clear();
-        _musicResults.clear();
-        _playlistResults.clear();
-        _userResults.clear();
+        final mainResults = results[0] as Map<String, dynamic>;
+        searchResults['users'] = mainResults['users'] ?? [];
+        searchResults['playlists'] = mainResults['playlists'] ?? [];
+        searchResults['musics'] = mainResults['musics'] ?? [];
+        searchResults['privatePlaylists'] = results[1];
+        isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-        ),
-      );
+    } catch (e) {
+      print("Arama hatası: $e");
+      setState(() {
+        isLoading = false;
+      });
+      _showError('Arama sırasında bir hata oluştu: $e');
     }
   }
 
-  void _launchURL(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  Future<Map<String, dynamic>> _searchAll(String query) async {
+    final url = '${UrlConstants.apiBaseUrl}/api/search/all?query=${Uri.encodeComponent(query)}';
+
+    final response = await http.get(Uri.parse(url));
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data['results'] ?? {};
     } else {
-      _showError('URL açılamıyor: $url');
+      throw Exception('Ana arama başarısız: ${response.statusCode}');
+    }
+  }
+
+  Future<List<dynamic>> _searchPrivatePlaylists(String query) async {
+    if (authToken == null) return [];
+
+    final url = '${UrlConstants.apiBaseUrl}/api/search/my-playlists?query=${Uri.encodeComponent(query)}';
+
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {'Authorization': 'Bearer $authToken'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data['results']['privatePlaylists'] ?? [];
+    } else {
+      print('Private playlist arama hatası: ${response.statusCode}');
+      return [];
     }
   }
 
@@ -166,87 +169,219 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildAllResults() {
-    if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+  String _getProfileImageUrl(String? imagePath) {
+    if (imagePath == null || imagePath.isEmpty || imagePath == 'image.jpg') {
+      return '';
+    }
+    return '${UrlConstants.apiBaseUrl}$imagePath';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        title: Container(
+          height: 40,
+          child: TextField(
+            controller: searchController,
+            style: TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Kullanıcı, playlist veya şarkı ara...',
+              hintStyle: TextStyle(color: Colors.grey[400]),
+              prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+              suffixIcon: searchController.text.isNotEmpty
+                  ? IconButton(
+                icon: Icon(Icons.clear, color: Colors.grey[400]),
+                onPressed: () {
+                  searchController.clear();
+                  setState(() {
+                    searchResults = {
+                      'users': [],
+                      'playlists': [],
+                      'musics': [],
+                      'privatePlaylists': []
+                    };
+                  });
+                },
+              )
+                  : null,
+              filled: true,
+              fillColor: Colors.grey[900],
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+            ),
+          ),
         ),
-      );
-    }
-
-    if (!_hasSearched) {
-      return _buildEmptyState();
-    }
-
-    if (_searchResults.isEmpty) {
-      return _buildNoResultsState();
-    }
-
-    return ListView(
-      padding: EdgeInsets.all(16),
-      children: [
-        if (_musicResults.isNotEmpty) ...[
-          _buildSectionHeader('Şarkılar', _musicResults.length),
-          SizedBox(height: 8),
-          ..._musicResults.take(3).map((music) => _buildMusicTile(music)),
-          if (_musicResults.length > 3) ...[
-            SizedBox(height: 8),
-            Center(
-              child: TextButton(
-                onPressed: () => _tabController.animateTo(1),
-                child: Text(
-                  '${_musicResults.length - 3} şarkı daha göster',
-                  style: TextStyle(color: Colors.orange),
-                ),
-              ),
-            ),
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          indicatorColor: Colors.orange,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.grey,
+          tabs: [
+            Tab(text: 'Tümü'),
+            Tab(text: 'Kullanıcılar'),
+            Tab(text: 'Playlistler'),
+            Tab(text: 'Şarkılar'),
+            if (authToken != null) Tab(text: 'Listelerim'),
           ],
-          SizedBox(height: 24),
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildAllResultsTab(),
+          _buildUsersTab(),
+          _buildPlaylistsTab(),
+          _buildMusicsTab(),
+          if (authToken != null) _buildPrivatePlaylistsTab(),
         ],
-
-        if (_playlistResults.isNotEmpty) ...[
-          _buildSectionHeader('Playlistler', _playlistResults.length),
-          SizedBox(height: 8),
-          ..._playlistResults.take(3).map((playlist) => _buildPlaylistTile(playlist)),
-          if (_playlistResults.length > 3) ...[
-            SizedBox(height: 8),
-            Center(
-              child: TextButton(
-                onPressed: () => _tabController.animateTo(2),
-                child: Text(
-                  '${_playlistResults.length - 3} playlist daha göster',
-                  style: TextStyle(color: Colors.orange),
-                ),
-              ),
-            ),
-          ],
-          SizedBox(height: 24),
-        ],
-
-        if (_userResults.isNotEmpty) ...[
-          _buildSectionHeader('Kullanıcılar', _userResults.length),
-          SizedBox(height: 8),
-          ..._userResults.take(3).map((user) => _buildUserTile(user)),
-          if (_userResults.length > 3) ...[
-            SizedBox(height: 8),
-            Center(
-              child: TextButton(
-                onPressed: () => _tabController.animateTo(3),
-                child: Text(
-                  '${_userResults.length - 3} kullanıcı daha göster',
-                  style: TextStyle(color: Colors.orange),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ],
+      ),
     );
   }
 
-  Widget _buildSectionHeader(String title, int count) {
+  Widget _buildAllResultsTab() {
+    if (isLoading) {
+      return Center(child: CircularProgressIndicator(color: Colors.orange));
+    }
+
+    if (searchController.text.isEmpty) {
+      return _buildEmptyState('Aramaya başlamak için yukarıya yazın');
+    }
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Kullanıcılar bölümü
+          if (searchResults['users'].isNotEmpty) ...[
+            _buildSectionHeader('Kullanıcılar', () {
+              _tabController.animateTo(1);
+            }),
+            SizedBox(height: 8),
+            ...searchResults['users'].take(3).map((user) => _buildUserTile(user)),
+            SizedBox(height: 20),
+          ],
+
+          // Playlistler bölümü
+          if (searchResults['playlists'].isNotEmpty) ...[
+            _buildSectionHeader('Playlistler', () {
+              _tabController.animateTo(2);
+            }),
+            SizedBox(height: 8),
+            ...searchResults['playlists'].take(3).map((playlist) => _buildPlaylistTile(playlist)),
+            SizedBox(height: 20),
+          ],
+
+          // Şarkılar bölümü
+          if (searchResults['musics'].isNotEmpty) ...[
+            _buildSectionHeader('Şarkılar', () {
+              _tabController.animateTo(3);
+            }),
+            SizedBox(height: 8),
+            ...searchResults['musics'].take(3).map((music) => _buildMusicTile(music)),
+          ],
+
+          // Sonuç bulunamadı
+          if (searchResults['users'].isEmpty &&
+              searchResults['playlists'].isEmpty &&
+              searchResults['musics'].isEmpty)
+            _buildEmptyState('Arama sonucu bulunamadı'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUsersTab() {
+    if (isLoading) {
+      return Center(child: CircularProgressIndicator(color: Colors.orange));
+    }
+
+    if (searchResults['users'].isEmpty) {
+      return _buildEmptyState(searchController.text.isEmpty
+          ? 'Kullanıcı aramak için yukarıya yazın'
+          : 'Kullanıcı bulunamadı');
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
+      itemCount: searchResults['users'].length,
+      itemBuilder: (context, index) {
+        return _buildUserTile(searchResults['users'][index]);
+      },
+    );
+  }
+
+  Widget _buildPlaylistsTab() {
+    if (isLoading) {
+      return Center(child: CircularProgressIndicator(color: Colors.orange));
+    }
+
+    if (searchResults['playlists'].isEmpty) {
+      return _buildEmptyState(searchController.text.isEmpty
+          ? 'Playlist aramak için yukarıya yazın'
+          : 'Playlist bulunamadı');
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
+      itemCount: searchResults['playlists'].length,
+      itemBuilder: (context, index) {
+        return _buildPlaylistTile(searchResults['playlists'][index]);
+      },
+    );
+  }
+
+  Widget _buildMusicsTab() {
+    if (isLoading) {
+      return Center(child: CircularProgressIndicator(color: Colors.orange));
+    }
+
+    if (searchResults['musics'].isEmpty) {
+      return _buildEmptyState(searchController.text.isEmpty
+          ? 'Şarkı aramak için yukarıya yazın'
+          : 'Şarkı bulunamadı');
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
+      itemCount: searchResults['musics'].length,
+      itemBuilder: (context, index) {
+        return _buildMusicTile(searchResults['musics'][index]);
+      },
+    );
+  }
+
+  Widget _buildPrivatePlaylistsTab() {
+    if (isLoading) {
+      return Center(child: CircularProgressIndicator(color: Colors.orange));
+    }
+
+    if (searchResults['privatePlaylists'].isEmpty) {
+      return _buildEmptyState(searchController.text.isEmpty
+          ? 'Kendi listelerinizde arama yapmak için yukarıya yazın'
+          : 'Listelerinizde sonuç bulunamadı');
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
+      itemCount: searchResults['privatePlaylists'].length,
+      itemBuilder: (context, index) {
+        return _buildPlaylistTile(searchResults['privatePlaylists'][index]);
+      },
+    );
+  }
+
+  Widget _buildSectionHeader(String title, VoidCallback onViewAll) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           title,
@@ -256,99 +391,77 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             fontWeight: FontWeight.bold,
           ),
         ),
-        SizedBox(width: 8),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-          ),
+        TextButton(
+          onPressed: onViewAll,
           child: Text(
-            '$count',
-            style: TextStyle(
-              color: Colors.orange,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
+            'Tümünü Gör',
+            style: TextStyle(color: Colors.orange),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildMusicResults() {
-    if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+  Widget _buildUserTile(Map<String, dynamic> user) {
+    return Card(
+      color: Colors.grey[900],
+      margin: EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundImage: user['profileImage'] != null
+              ? NetworkImage(_getProfileImageUrl(user['profileImage']))
+              : AssetImage('assets/default_profile.png') as ImageProvider,
+          radius: 25,
+          backgroundColor: Colors.grey[700],
         ),
-      );
-    }
-
-    if (_musicResults.isEmpty) {
-      return _buildNoResultsState();
-    }
-
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount: _musicResults.length,
-      itemBuilder: (context, index) {
-        return CommonMusicPlayer(
-          track: _musicResults[index],
-          userId: widget.userId,
-          lazyLoad: true,
-        );
-      },
-    );
-  }
-
-  Widget _buildPlaylistResults() {
-    if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+        title: Text(
+          user['username'] ?? '',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-      );
-    }
-
-    if (_playlistResults.isEmpty) {
-      return _buildNoResultsState();
-    }
-
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount: _playlistResults.length,
-      itemBuilder: (context, index) {
-        return _buildPlaylistTile(_playlistResults[index]);
-      },
-    );
-  }
-
-  Widget _buildUserResults() {
-    if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (user['firstName'] != null || user['lastName'] != null)
+              Text(
+                '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim(),
+                style: TextStyle(color: Colors.grey[400]),
+              ),
+            if (user['bio'] != null && user['bio'].isNotEmpty)
+              Text(
+                user['bio'],
+                style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
         ),
-      );
-    }
-
-    if (_userResults.isEmpty) {
-      return _buildNoResultsState();
-    }
-
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount: _userResults.length,
-      itemBuilder: (context, index) {
-        return _buildUserTile(_userResults[index]);
-      },
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '${user['followerCount'] ?? 0}',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              'takipçi',
+              style: TextStyle(color: Colors.grey[400], fontSize: 10),
+            ),
+          ],
+        ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => UserProfileScreen(userId: user['_id']),
+            ),
+          );
+        },
+      ),
     );
   }
 
   Widget _buildPlaylistTile(Map<String, dynamic> playlist) {
-    final isPrivate = playlist['isPublic'] != true;
-    final musicCount = playlist['musicCount'] ?? 0;
+    final isPrivate = playlist['type'] == 'private_playlist';
 
     return Card(
       color: Colors.grey[900],
@@ -358,17 +471,17 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.2),
+            color: Colors.orange.withOpacity(0.2),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
-            isPrivate ? Icons.lock : Icons.queue_music,
-            color: isPrivate ? Colors.grey[600] : Colors.blue,
+            isPrivate ? Icons.lock : Icons.library_music,
+            color: Colors.orange,
             size: 24,
           ),
         ),
         title: Text(
-          playlist['name'] ?? 'Unnamed Playlist',
+          playlist['name'] ?? '',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -379,14 +492,14 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             if (playlist['description'] != null && playlist['description'].isNotEmpty)
               Text(
                 playlist['description'],
-                style: TextStyle(color: Colors.grey[400]),
+                style: TextStyle(color: Colors.grey[400], fontSize: 12),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             Row(
               children: [
                 Text(
-                  '$musicCount şarkı',
+                  '${playlist['musicCount'] ?? 0} şarkı',
                   style: TextStyle(color: Colors.grey[500], fontSize: 11),
                 ),
                 if (playlist['genre'] != null) ...[
@@ -418,7 +531,17 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   }
 
   Widget _buildMusicTile(Map<String, dynamic> music) {
-    final displayArtists = _getDisplayArtists(music);
+    // Sanatçı adlarını göster - yeni sistem varsa onu kullan
+    String displayArtists = '';
+    if (music['displayArtists'] != null) {
+      displayArtists = music['displayArtists'];
+    } else if (music['artists'] != null && music['artists'] is List && music['artists'].isNotEmpty) {
+      displayArtists = (music['artists'] as List).join(', ');
+    } else if (music['artist'] != null && music['artist'].isNotEmpty) {
+      displayArtists = music['artist'];
+    } else {
+      displayArtists = 'Unknown Artist';
+    }
 
     return Card(
       color: Colors.grey[900],
@@ -494,60 +617,6 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildUserTile(Map<String, dynamic> user) {
-    return Card(
-      color: Colors.grey[900],
-      margin: EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          radius: 25,
-          backgroundColor: Colors.grey[700],
-          backgroundImage: user['profileImage'] != null && user['profileImage'] != 'image.jpg'
-              ? NetworkImage('${UrlConstants.apiBaseUrl}/uploads/profile/${user['profileImage']}')
-              : null,
-          child: user['profileImage'] == null || user['profileImage'] == 'image.jpg'
-              ? Icon(Icons.person, color: Colors.white, size: 24)
-              : null,
-        ),
-        title: Text(
-          user['username'] ?? 'Unknown User',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (user['firstName'] != null || user['lastName'] != null)
-              Text(
-                '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim(),
-                style: TextStyle(color: Colors.grey[400]),
-              ),
-            Row(
-              children: [
-                Icon(Icons.people, color: Colors.grey[500], size: 12),
-                SizedBox(width: 4),
-                Text(
-                  '${user['followerCount'] ?? 0} takipçi',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                ),
-              ],
-            ),
-          ],
-        ),
-        trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 16),
-        onTap: () {
-          Navigator.pushNamed(
-            context,
-            '/user_profile',
-            arguments: {
-              'userId': user['_id'],
-              'currentUserId': widget.userId,
-            },
-          );
-        },
-      ),
-    );
-  }
-
   void _showSpotifyPlayer(String? spotifyId, String? title, String? artists) {
     if (spotifyId == null || spotifyId.isEmpty) {
       _showError('Spotify ID bulunamadı');
@@ -572,17 +641,18 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            title ?? 'Unknown Title',
+                            title ?? 'Spotify Player',
                             style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          Text(
-                            artists ?? 'Unknown Artist',
-                            style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                            maxLines: 2, // Çoklu sanatçı için 2 satır
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          if (artists != null && artists.isNotEmpty)
+                            Text(
+                              artists,
+                              style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                         ],
                       ),
                     ),
@@ -594,11 +664,28 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 ),
                 SizedBox(height: 16),
                 Expanded(
-                  child: WebViewWidget(
-                    controller: WebViewController()
-                      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                      ..loadRequest(Uri.parse('https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0')),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[800],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: _buildSpotifyEmbed(spotifyId),
                   ),
+                ),
+                SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _launchURL('https://open.spotify.com/track/$spotifyId'),
+                      icon: Icon(Icons.open_in_new, color: Colors.white),
+                      label: Text('Spotify\'da Aç', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -608,6 +695,19 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
+  Widget _buildSpotifyEmbed(String spotifyId) {
+    final webViewKey = 'spotify_$spotifyId';
+
+    if (!_webViewControllers.containsKey(webViewKey)) {
+      _webViewControllers[webViewKey] = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(Colors.transparent)
+        ..loadRequest(Uri.parse('https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0'));
+    }
+
+    return WebViewWidget(controller: _webViewControllers[webViewKey]!);
+  }
+
   void _showPlaylistDetail(Map<String, dynamic> playlist) {
     showDialog(
       context: context,
@@ -615,7 +715,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         return Dialog(
           backgroundColor: Colors.black,
           child: Container(
-            height: 600,
+            height: 400,
             padding: EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -625,7 +725,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                   children: [
                     Expanded(
                       child: Text(
-                        playlist['name'] ?? 'Unnamed Playlist',
+                        playlist['name'] ?? 'Playlist',
                         style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -637,55 +737,41 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                     ),
                   ],
                 ),
-                if (playlist['description'] != null && playlist['description'].isNotEmpty) ...[
-                  SizedBox(height: 8),
+                SizedBox(height: 8),
+                if (playlist['description'] != null && playlist['description'].isNotEmpty)
                   Text(
                     playlist['description'],
-                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                    maxLines: 3,
+                    style: TextStyle(color: Colors.grey[400]),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ],
                 SizedBox(height: 16),
                 Row(
                   children: [
+                    Icon(Icons.music_note, color: Colors.orange, size: 16),
+                    SizedBox(width: 4),
                     Text(
                       '${playlist['musicCount'] ?? 0} şarkı',
-                      style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                      style: TextStyle(color: Colors.grey[400]),
                     ),
                     if (playlist['genre'] != null) ...[
-                      Text(' • ', style: TextStyle(color: Colors.grey[400])),
+                      SizedBox(width: 16),
+                      Icon(Icons.category, color: Colors.orange, size: 16),
+                      SizedBox(width: 4),
                       Text(
                         playlist['genre'],
-                        style: TextStyle(color: Colors.orange, fontSize: 12),
+                        style: TextStyle(color: Colors.orange),
                       ),
                     ],
                   ],
                 ),
                 SizedBox(height: 16),
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: (playlist['previewMusics'] as List?)?.length ?? 0,
-                    itemBuilder: (context, index) {
-                      final music = playlist['previewMusics'][index];
-                      final displayArtists = _getDisplayArtists(music);
-
-                      return ListTile(
-                        leading: Icon(Icons.music_note, color: Colors.orange),
-                        title: Text(
-                          music['title'] ?? 'Unknown Title',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          displayArtists,
-                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    },
+                  child: Center(
+                    child: Text(
+                      'Playlist detayları burada gösterilecek',
+                      style: TextStyle(color: Colors.grey[500]),
+                    ),
                   ),
                 ),
               ],
@@ -696,150 +782,69 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.search,
-            color: Colors.grey[600],
-            size: 64,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Şarkı, playlist veya kullanıcı arayın',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 16,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Arama yapmak için yukarıdaki kutuya yazın',
-            style: TextStyle(
-              color: Colors.grey[500],
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _launchURL(String url) async {
+    try {
+      String formattedUrl = url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        formattedUrl = 'https://$url';
+      }
+
+      final Uri uri = Uri.parse(formattedUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        _showError("Link açılamadı");
+      }
+    } catch (e) {
+      _showError("Geçersiz link: $e");
+    }
   }
 
-  Widget _buildNoResultsState() {
+  Widget _buildEmptyState(String message) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             Icons.search_off,
-            color: Colors.grey[600],
             size: 64,
+            color: Colors.grey[600],
           ),
           SizedBox(height: 16),
           Text(
-            'Sonuç bulunamadı',
+            message,
             style: TextStyle(
               color: Colors.grey[400],
               fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            '"$_currentQuery" için hiçbir sonuç bulunamadı',
-            style: TextStyle(
-              color: Colors.grey[500],
-              fontSize: 14,
             ),
             textAlign: TextAlign.center,
           ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Column(
-        children: [
-          // Search Bar
-          Container(
-            padding: EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              style: TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Şarkı, playlist veya kullanıcı ara...',
-                hintStyle: TextStyle(color: Colors.grey[500]),
-                prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                  icon: Icon(Icons.clear, color: Colors.grey[500]),
-                  onPressed: () {
-                    _searchController.clear();
-                    _performSearch('');
-                  },
-                )
-                    : null,
-                filled: true,
-                fillColor: Colors.grey[900],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.orange, width: 2),
-                ),
-              ),
-              onChanged: (value) {
-                if (value.trim().isEmpty) {
-                  _performSearch('');
-                }
-              },
-              onSubmitted: _performSearch,
-            ),
-          ),
-
-          // Tab Bar
-          if (_hasSearched) ...[
+          if (searchController.text.isEmpty) ...[
+            SizedBox(height: 32),
             Container(
-              color: Colors.grey[900],
-              child: TabBar(
-                controller: _tabController,
-                tabs: [
-                  Tab(text: 'Tümü (${_searchResults.length})'),
-                  Tab(text: 'Şarkılar (${_musicResults.length})'),
-                  Tab(text: 'Playlistler (${_playlistResults.length})'),
-                  Tab(text: 'Kullanıcılar (${_userResults.length})'),
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.lightbulb_outline, color: Colors.orange, size: 32),
+                  SizedBox(height: 8),
+                  Text(
+                    'Arama İpuçları:',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '• Sanatçı adı: "David Guetta"\n• Şarkı adı: "Titanium"\n• Kullanıcı adı: "@username"\n• Playlist adı: "Chill House"',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
-                labelColor: Colors.orange,
-                unselectedLabelColor: Colors.grey[400],
-                indicatorColor: Colors.orange,
-                labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                unselectedLabelStyle: TextStyle(fontSize: 12),
               ),
             ),
           ],
-
-          // Content
-          Expanded(
-            child: _hasSearched
-                ? TabBarView(
-              controller: _tabController,
-              children: [
-                _buildAllResults(),
-                _buildMusicResults(),
-                _buildPlaylistResults(),
-                _buildUserResults(),
-              ],
-            )
-                : _buildEmptyState(),
-          ),
         ],
       ),
     );

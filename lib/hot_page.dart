@@ -53,35 +53,6 @@ class _HotPageState extends State<HotPage>
     'melodichouse': Icons.piano,
   };
 
-  // Çoklu sanatçı desteği için helper method
-  String _getDisplayArtists(Map<String, dynamic> music) {
-    // 1. displayArtists varsa onu kullan (backend'den gelen hazır format)
-    if (music['displayArtists'] != null &&
-        music['displayArtists'].toString().isNotEmpty) {
-      return music['displayArtists'].toString();
-    }
-
-    // 2. artists array varsa onu birleştir
-    if (music['artists'] != null &&
-        music['artists'] is List &&
-        (music['artists'] as List).isNotEmpty) {
-      final artistsList = music['artists'] as List;
-      return artistsList
-          .where((artist) => artist != null && artist.toString().trim().isNotEmpty)
-          .map((artist) => artist.toString().trim())
-          .join(', ');
-    }
-
-    // 3. Eski tek sanatçı field'i varsa onu kullan (backward compatibility)
-    if (music['artist'] != null &&
-        music['artist'].toString().trim().isNotEmpty) {
-      return music['artist'].toString().trim();
-    }
-
-    // 4. Hiçbiri yoksa default
-    return 'Unknown Artist';
-  }
-
   @override
   void initState() {
     super.initState();
@@ -134,109 +105,100 @@ class _HotPageState extends State<HotPage>
           final categories = data['hotPlaylists'] as List<dynamic>;
 
           // Pre-process and preload categories
-          final processedCategories = categories.map<Map<String, dynamic>>((category) {
-            return {
-              'genre': category['_id'],
-              'displayName': genreDisplayNames[category['_id']] ?? category['_id'],
-              'icon': genreIcons[category['_id']] ?? Icons.music_note,
-              'musics': category['musics'] as List<dynamic>,
-              'playlistInfo': category['playlistInfo'],
-            };
-          }).toList();
+          await _preprocessAndPreloadCategories(categories);
 
           setState(() {
-            hotCategories = processedCategories;
-            isLoading = false;
+            hotCategories = List<Map<String, dynamic>>.from(categories);
           });
 
-          // Initialize expanded states
-          for (var category in hotCategories) {
-            _expandedStates[category['genre']] = false;
-          }
-
-          // Start preloading first category
-          if (hotCategories.isNotEmpty) {
-            _preloadCategory(hotCategories.first['genre']);
-          }
-        } else {
-          _handleError('Hot müzikler yüklenemedi');
+          // Wait for all preloading to complete
+          await _waitForPreloadingComplete();
         }
       } else {
-        _handleError('Sunucu hatası: ${response.statusCode}');
+        throw Exception('Failed to load hot categories: ${response.statusCode}');
       }
     } catch (e) {
-      _handleError('Bağlantı hatası: $e');
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          hasError = true;
+          errorMessage = e.toString();
+        });
+        _animationController.stop();
+      }
     }
   }
 
-  void _handleError(String message) {
+  Future<void> _preprocessAndPreloadCategories(List<dynamic> categories) async {
+    print('Hot Page: Preprocessing ${categories.length} categories');
+
+    for (final category in categories) {
+      final genre = category['genre']?.toString();
+      if (genre == null) continue;
+
+      // Initialize states
+      _expandedStates[genre] = false;
+      _categoryPreloadStatus[genre] = false;
+
+      // Skip empty categories
+      if (category['isEmpty'] == true || category['name'] == null) {
+        _preloadedMusicPlayers[genre] = [];
+        _categoryPreloadStatus[genre] = true;
+        continue;
+      }
+
+      final musics = category['musics'] as List<dynamic>? ?? [];
+      if (musics.isEmpty) {
+        _preloadedMusicPlayers[genre] = [];
+        _categoryPreloadStatus[genre] = true;
+        continue;
+      }
+
+      // Create CommonMusicPlayer widgets for all tracks with preloading enabled
+      final List<Widget> musicPlayers = [];
+
+      for (final music in musics) {
+        final musicPlayer = CommonMusicPlayer(
+          key: ValueKey('hot_${genre}_${music['_id'] ?? music['spotifyId']}'),
+          track: music,
+          userId: widget.userId,
+          preloadWebView: true,
+          lazyLoad: false,
+          onLikeChanged: () {
+            _loadHotCategories();
+          },
+        );
+        musicPlayers.add(musicPlayer);
+      }
+
+      _preloadedMusicPlayers[genre] = musicPlayers;
+      _categoryPreloadStatus[genre] = true;
+
+      print('Hot Page: Preloaded ${musics.length} tracks for category: ${category['genreDisplayName']}');
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _waitForPreloadingComplete() async {
+    print('Hot Page: Waiting for preloading to complete...');
+
+    // Simulate preloading time
+    await Future.delayed(Duration(seconds: 3));
+
     if (mounted) {
       setState(() {
         isLoading = false;
-        hasError = true;
-        errorMessage = message;
+        _allCategoriesPreloaded = true;
       });
+      _animationController.stop();
+      print('Hot Page: All categories preloaded!');
     }
   }
 
-  Future<void> _preloadCategory(String genre) async {
-    if (_categoryPreloadStatus[genre] == true || !mounted) return;
-
-    final category = hotCategories.firstWhere(
-          (cat) => cat['genre'] == genre,
-      orElse: () => {},
-    );
-
-    if (category.isEmpty) return;
-
-    _categoryPreloadStatus[genre] = true;
-
-    final musics = category['musics'] as List<dynamic>;
-    final preloadedPlayers = <Widget>[];
-
-    for (int i = 0; i < musics.length && i < 10; i++) {
-      final music = musics[i];
-      final player = CommonMusicPlayer(
-        key: ValueKey('hot_${genre}_${music['_id']}_$i'),
-        track: music,
-        userId: widget.userId,
-        preloadWebView: true,
-        lazyLoad: false,
-      );
-      preloadedPlayers.add(player);
-
-      // Small delay between preloads
-      if (mounted) {
-        await Future.delayed(Duration(milliseconds: 100));
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _preloadedMusicPlayers[genre] = preloadedPlayers;
-      });
-    }
-  }
-
-  void _toggleCategory(String genre) async {
-    setState(() {
-      _expandedStates[genre] = !(_expandedStates[genre] ?? false);
-    });
-
-    // Preload if expanding and not already preloaded
-    if (_expandedStates[genre] == true && _categoryPreloadStatus[genre] != true) {
-      await _preloadCategory(genre);
-    }
-
-    // Preload next category
-    final currentIndex = hotCategories.indexWhere((cat) => cat['genre'] == genre);
-    if (currentIndex != -1 && currentIndex + 1 < hotCategories.length) {
-      final nextGenre = hotCategories[currentIndex + 1]['genre'];
-      _preloadCategory(nextGenre);
-    }
-  }
-
-  Widget _buildLoadingAnimation() {
+  Widget _buildLoadingScreen() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -246,29 +208,32 @@ class _HotPageState extends State<HotPage>
             builder: (context, child) {
               return Transform.scale(
                 scale: _scaleAnimation.value,
-                child: Icon(
-                  Icons.whatshot,
-                  size: 80,
-                  color: _colorAnimation.value,
+                child: Text(
+                  'H',
+                  style: TextStyle(
+                    color: _colorAnimation.value,
+                    fontSize: 96,
+                    fontWeight: FontWeight.bold,
+                    fontStyle: FontStyle.italic,
+                    shadows: [
+                      Shadow(
+                        color: Colors.white.withOpacity(0.7),
+                        blurRadius: 15,
+                        offset: Offset(0, 0),
+                      )
+                    ],
+                  ),
                 ),
               );
             },
           ),
-          SizedBox(height: 24),
+          SizedBox(height: 30),
           Text(
-            'Hot Müzikler Yükleniyor...',
+            'Hot Tracks Yükleniyor...',
             style: TextStyle(
-              color: Colors.white,
+              color: Colors.white.withOpacity(0.8),
               fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 16),
-          Container(
-            width: 200,
-            child: LinearProgressIndicator(
-              backgroundColor: Colors.grey[800],
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+              letterSpacing: 1.5,
             ),
           ),
         ],
@@ -276,221 +241,112 @@ class _HotPageState extends State<HotPage>
     );
   }
 
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            color: Colors.red,
-            size: 64,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Hata Oluştu',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            errorMessage,
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 14,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _loadHotCategories,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.black,
-            ),
-            child: Text('Tekrar Dene'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryTile(Map<String, dynamic> category) {
-    final genre = category['genre'] as String;
-    final displayName = category['displayName'] as String;
-    final icon = category['icon'] as IconData;
-    final musics = category['musics'] as List<dynamic>;
-    final isExpanded = _expandedStates[genre] ?? false;
+  Widget _buildCategorySection(Map<String, dynamic> category) {
+    final genre = category['genre']?.toString() ?? '';
+    final genreDisplayName = category['genreDisplayName'] ?? genreDisplayNames[genre] ?? genre;
     final isPreloaded = _categoryPreloadStatus[genre] ?? false;
     final preloadedPlayers = _preloadedMusicPlayers[genre] ?? [];
-
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.grey[900],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ExpansionTile(
-        leading: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: Colors.orange, size: 24),
-        ),
-        title: Text(
-          displayName,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        subtitle: Text(
-          '${musics.length} hot şarkı',
-          style: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 12,
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isPreloaded)
-              Container(
-                margin: EdgeInsets.only(right: 8),
-                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  'Hazır',
-                  style: TextStyle(
-                    color: Colors.green,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            Icon(
-              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-              color: Colors.white70,
-            ),
-          ],
-        ),
-        onExpansionChanged: (expanded) {
-          if (expanded) {
-            _toggleCategory(genre);
-          } else {
-            setState(() {
-              _expandedStates[genre] = false;
-            });
-          }
-        },
-        children: isExpanded ? _buildMusicList(genre, musics, preloadedPlayers) : [],
-      ),
-    );
-  }
-
-  List<Widget> _buildMusicList(String genre, List<dynamic> musics, List<Widget> preloadedPlayers) {
-    if (musics.isEmpty) {
-      return [
-        Container(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Icon(Icons.music_off, color: Colors.grey[600], size: 32),
-              SizedBox(height: 8),
-              Text(
-                'Bu kategoride hot müzik bulunamadı',
-                style: TextStyle(color: Colors.grey[400], fontSize: 14),
-              ),
-            ],
-          ),
-        )
-      ];
-    }
-
-    // Use preloaded players if available, otherwise create new ones
-    if (preloadedPlayers.isNotEmpty) {
-      return preloadedPlayers;
-    }
-
-    return musics.asMap().entries.map((entry) {
-      final index = entry.key;
-      final music = entry.value;
-
-      return CommonMusicPlayer(
-        key: ValueKey('hot_${genre}_${music['_id']}_$index'),
-        track: music,
-        userId: widget.userId,
-        lazyLoad: true,
-      );
-    }).toList();
-  }
-
-  Widget _buildStatsHeader() {
-    final totalMusics = hotCategories.fold<int>(
-      0,
-          (sum, category) => sum + (category['musics'] as List).length,
-    );
+    final isExpanded = _expandedStates[genre] ?? false;
+    final isEmpty = category['isEmpty'] == true || category['name'] == null;
 
     return Container(
-      margin: EdgeInsets.all(16),
-      padding: EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.orange.withOpacity(0.2), Colors.red.withOpacity(0.2)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[800]!, width: 1),
       ),
-      child: Row(
+      child: ExpansionTile(
+        key: ValueKey(genre),
+        initiallyExpanded: isExpanded,
+        onExpansionChanged: (expanded) {
+          setState(() {
+            _expandedStates[genre] = expanded;
+          });
+        },
+        tilePadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        childrenPadding: EdgeInsets.only(bottom: 8),
+        iconColor: Colors.white,
+        collapsedIconColor: Colors.white70,
+        leading: Container(
+          width: 8,
+          height: 40,
+          decoration: BoxDecoration(
+            color: isEmpty ? Colors.grey[600] : Colors.white,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        title: Text(
+          genreDisplayName,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: isEmpty
+            ? Text(
+          'Henüz playlist eklenmedi',
+          style: TextStyle(
+            color: Colors.grey[400],
+            fontSize: 13,
+          ),
+        )
+            : Text(
+          category['name'] ?? 'Unnamed Playlist',
+          style: TextStyle(
+            color: Colors.grey[300],
+            fontSize: 14,
+          ),
+        ),
         children: [
-          Icon(Icons.whatshot, color: Colors.orange, size: 32),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hot Müzikler',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+          if (!isEmpty && isExpanded) ...[
+            if (isPreloaded && preloadedPlayers.isNotEmpty)
+              ...preloadedPlayers.map((player) => Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: player,
+              )).toList()
+            else if (!isPreloaded)
+              Container(
+                height: 80,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Loading...',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  '$totalMusics şarkı • ${hotCategories.length} kategori',
-                  style: TextStyle(
-                    color: Colors.grey[300],
-                    fontSize: 14,
+              )
+            else
+              Container(
+                height: 60,
+                child: Center(
+                  child: Text(
+                    'Empty playlist',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 13,
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.orange,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'TREND',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
               ),
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -500,56 +356,144 @@ class _HotPageState extends State<HotPage>
   Widget build(BuildContext context) {
     super.build(context);
 
-    if (isLoading) {
-      return _buildLoadingAnimation();
+    if (isLoading || !_allCategoriesPreloaded) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: _buildLoadingScreen(),
+      );
     }
 
     if (hasError) {
-      return _buildErrorState();
-    }
-
-    if (hotCategories.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.music_off,
-              color: Colors.grey[600],
-              size: 64,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Hot müzik bulunamadı',
-              style: TextStyle(
-                color: Colors.grey[400],
-                fontSize: 16,
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 64,
               ),
-            ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadHotCategories,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.black,
+              SizedBox(height: 16),
+              Text(
+                'Yükleme hatası',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              child: Text('Yenile'),
-            ),
-          ],
+              SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _loadHotCategories,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: Text('Tekrar Dene'),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadHotCategories,
-      backgroundColor: Colors.grey[900],
-      color: Colors.orange,
-      child: ListView(
-        children: [
-          _buildStatsHeader(),
-          ...hotCategories.map((category) => _buildCategoryTile(category)),
-          SizedBox(height: 20),
-        ],
+    if (hotCategories.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.music_off,
+                color: Colors.grey[600],
+                size: 64,
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Henüz hot playlist bulunamadı',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: RefreshIndicator(
+        onRefresh: _loadHotCategories,
+        color: Colors.orange,
+        backgroundColor: Colors.black,
+        child: CustomScrollView(
+          slivers: [
+            // Header
+            SliverToBoxAdapter(
+              child: Container(
+                margin: EdgeInsets.all(16),
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.orange.withOpacity(0.1), Colors.red.withOpacity(0.1)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [Colors.orange, Colors.red]),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.whatshot, color: Colors.white, size: 28),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Hot Playlists',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Categories List
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  final category = hotCategories[index];
+                  return _buildCategorySection(category);
+                },
+                childCount: hotCategories.length,
+              ),
+            ),
+
+            // Bottom padding
+            SliverToBoxAdapter(
+              child: SizedBox(height: 100),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -43,35 +43,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
   @override
   bool get wantKeepAlive => true;
 
-  // Çoklu sanatçı desteği için helper method
-  String _getDisplayArtists() {
-    // 1. displayArtists varsa onu kullan (backend'den gelen hazır format)
-    if (widget.track['displayArtists'] != null &&
-        widget.track['displayArtists'].toString().isNotEmpty) {
-      return widget.track['displayArtists'].toString();
-    }
-
-    // 2. artists array varsa onu birleştir
-    if (widget.track['artists'] != null &&
-        widget.track['artists'] is List &&
-        (widget.track['artists'] as List).isNotEmpty) {
-      final artistsList = widget.track['artists'] as List;
-      return artistsList
-          .where((artist) => artist != null && artist.toString().trim().isNotEmpty)
-          .map((artist) => artist.toString().trim())
-          .join(', ');
-    }
-
-    // 3. Eski tek sanatçı field'i varsa onu kullan (backward compatibility)
-    if (widget.track['artist'] != null &&
-        widget.track['artist'].toString().trim().isNotEmpty) {
-      return widget.track['artist'].toString().trim();
-    }
-
-    // 4. Hiçbiri yoksa default
-    return 'Unknown Artist';
-  }
-
   @override
   void initState() {
     super.initState();
@@ -111,32 +82,102 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
       _webViewController = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setBackgroundColor(Colors.transparent)
+        ..setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1')
+        ..enableZoom(false)
         ..setNavigationDelegate(
           NavigationDelegate(
-            onPageStarted: (String url) {
-              print('CommonMusicPlayer: Page started loading: $url');
+            onPageStarted: (url) {
+              print('CommonMusicPlayer WebView started loading: $url');
             },
-            onPageFinished: (String url) async {
+            onPageFinished: (url) async {
+              print('CommonMusicPlayer WebView loaded: $url for track: ${widget.track['title']}');
+
+              await _webViewController.runJavaScript('''
+                (function() {
+                  var existingStyle = document.getElementById('common-custom-style');
+                  if (existingStyle) existingStyle.remove();
+                  
+                  var style = document.createElement('style');
+                  style.id = 'common-custom-style';
+                  style.innerHTML = `
+                    * { 
+                      -webkit-transform: translateZ(0); 
+                      transform: translateZ(0);
+                      -webkit-backface-visibility: hidden;
+                      backface-visibility: hidden;
+                    }
+                    body { 
+                      overflow: hidden !important; 
+                      margin: 0 !important; 
+                      padding: 0 !important;
+                      background: transparent !important;
+                    }
+                    iframe {
+                      border: none !important;
+                      background: transparent !important;
+                      border-radius: 8px !important;
+                    }
+                    .spotifyContent {
+                      border-radius: 8px !important;
+                    }
+                  `;
+                  document.head.appendChild(style);
+                  
+                  setTimeout(function() {
+                    var iframe = document.querySelector('iframe');
+                    if (iframe) {
+                      iframe.onload = function() {
+                        console.log('CommonMusicPlayer Iframe fully loaded');
+                      };
+                    }
+                  }, 500);
+                })();
+              ''');
+
               if (mounted) {
                 setState(() {
                   _isWebViewLoaded = true;
                 });
-                widget.onWebViewLoaded?.call(widget.webViewKey ?? spotifyId);
-                print('CommonMusicPlayer: Page finished loading: $url');
+              }
+
+              if (widget.webViewKey != null && widget.onWebViewLoaded != null) {
+                widget.onWebViewLoaded!(widget.webViewKey!);
               }
             },
-            onWebResourceError: (WebResourceError error) {
-              print('CommonMusicPlayer: WebView error: ${error.description}');
+            onWebResourceError: (error) {
+              print('CommonMusicPlayer WebView error: ${error.description}');
+              if (mounted) {
+                setState(() {
+                  _isWebViewLoaded = true;
+                });
+              }
+              if (widget.webViewKey != null && widget.onWebViewLoaded != null) {
+                widget.onWebViewLoaded!(widget.webViewKey!);
+              }
+            },
+            onNavigationRequest: (request) {
+              if (request.url.contains('spotify.com') ||
+                  request.url.contains('scdn.co') ||
+                  request.url.contains('spotilocal.com')) {
+                return NavigationDecision.navigate;
+              }
+              return NavigationDecision.prevent;
             },
           ),
         )
-        ..loadRequest(Uri.parse('https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0'));
+        ..loadRequest(Uri.parse(
+          'https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0&view=compact&show-cover=0',
+        ));
 
-      if (mounted) {
-        setState(() {
-          _isWebViewInitialized = true;
-        });
-      }
+      setState(() {
+        _isWebViewInitialized = true;
+      });
+    }
+  }
+
+  void startWebViewLoading() {
+    if (!_isWebViewInitialized && !_hasStartedLoading) {
+      _initializeWebView();
     }
   }
 
@@ -147,8 +188,6 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      if (token == null) return;
-
       final response = await http.get(
         Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists/user/${widget.userId}'),
         headers: {'Authorization': 'Bearer $token'},
@@ -156,7 +195,7 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['success'] == true && mounted) {
+        if (mounted && data['success'] == true) {
           setState(() {
             userPlaylists = List<Map<String, dynamic>>.from(data['playlists'] ?? []);
           });
@@ -168,326 +207,398 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
   }
 
   Future<void> _toggleLike() async {
-    if (widget.userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Beğenmek için giriş yapmalısınız'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
+    if (widget.userId == null) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-
-      if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Oturum süresi dolmuş. Tekrar giriş yapın.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      final musicId = widget.track['_id']?.toString() ?? widget.track['id']?.toString();
-      if (musicId == null) return;
-
       final response = await http.post(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/music/like/$musicId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        Uri.parse('${UrlConstants.apiBaseUrl}/api/music/${widget.track['_id']}/like'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': widget.userId}),
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true && mounted) {
-          setState(() {
-            widget.track['likes'] = data['likes'];
-            widget.track['userLikes'] = List<String>.from(data['userLikes'] ?? []);
-          });
-          widget.onLikeChanged?.call();
+      if (response.statusCode == 200 && mounted) {
+        final currentLikes = widget.track['likes'] ?? 0;
+        final userLikes = List<String>.from(widget.track['userLikes'] ?? []);
+
+        if (userLikes.contains(widget.userId)) {
+          userLikes.remove(widget.userId);
+          widget.track['likes'] = currentLikes - 1;
+        } else {
+          userLikes.add(widget.userId!);
+          widget.track['likes'] = currentLikes + 1;
         }
+        widget.track['userLikes'] = userLikes;
+
+        setState(() {});
+        widget.onLikeChanged?.call();
+
+        _showSnackBar('Like updated', Colors.green);
       }
     } catch (e) {
-      print('Error toggling like: $e');
+      _showSnackBar('Error liking track: $e', Colors.red);
     }
   }
 
   bool _isLikedByUser() {
-    if (widget.userId == null) return false;
-    final userLikes = widget.track['userLikes'] as List?;
-    return userLikes?.contains(widget.userId) ?? false;
+    return widget.track['userLikes']?.contains(widget.userId) ?? false;
   }
 
-  void _showPlaylistOptions() {
-    showDialog(
+  Future<void> _launchBeatportUrl() async {
+    final url = widget.track['beatportUrl']?.toString();
+    if (url == null || url.isEmpty) return;
+
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        _showSnackBar('Could not launch Beatport link', Colors.red);
+      }
+    } catch (e) {
+      _showSnackBar('Error launching URL: $e', Colors.red);
+    }
+  }
+
+  void _showAddToPlaylistDialog() {
+    StandardizedPlaylistDialog.show(
       context: context,
-      builder: (context) => StandardizedPlaylistDialog(
-        track: widget.track,
-        userId: widget.userId,
-        userPlaylists: userPlaylists,
-        onPlaylistsUpdated: _loadUserPlaylists,
+      track: widget.track,
+      userId: widget.userId,
+      onPlaylistUpdated: () {
+        _loadUserPlaylists();
+        widget.onLikeChanged?.call();
+      },
+    );
+  }
+
+  Future<void> _addToExistingPlaylist(String playlistId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final response = await http.post(
+        Uri.parse('${UrlConstants.apiBaseUrl}/api/music/${widget.track['_id']}/add-to-playlist'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'playlistId': playlistId,
+          'userId': widget.userId,
+        }),
+      );
+
+      final responseData = json.decode(response.body);
+      _showSnackBar(
+        responseData['message'] ?? 'Added to playlist successfully',
+        response.statusCode == 200 ? Colors.green : Colors.red,
+      );
+
+      if (response.statusCode == 200) {
+        await _loadUserPlaylists();
+      }
+    } catch (e) {
+      _showSnackBar('Error: ${e.toString()}', Colors.red);
+    }
+  }
+
+  Future<void> _navigateToCreatePlaylist() async {
+    try {
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CreatePlaylistPage(initialMusicId: widget.track['_id']),
+        ),
+      );
+
+      if (result == true) {
+        _showSnackBar('Playlist created successfully!', Colors.green);
+        await _loadUserPlaylists();
+      }
+    } catch (e) {
+      _showSnackBar('Error creating playlist: $e', Colors.red);
+    }
+  }
+
+  void _showSnackBar(String message, Color backgroundColor) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 
-  void _launchBeatportUrl() async {
-    final beatportUrl = widget.track['beatportUrl']?.toString();
-    if (beatportUrl != null && beatportUrl.isNotEmpty) {
-      final Uri url = Uri.parse(beatportUrl);
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
+  Widget _buildWebViewSection() {
+    if (!_isWebViewInitialized || !_isWebViewLoaded) {
+      return Container(
+        height: 80,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(12),
+            topRight: Radius.circular(12),
+          ),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.grey[850]!,
+              Colors.grey[900]!,
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.music_note,
+                  color: Colors.white.withOpacity(0.7),
+                  size: 20,
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      widget.track['title'] ?? 'Unknown Track',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.track['artist'] ?? 'Unknown Artist',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.7)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
+
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(12),
+          topRight: Radius.circular(12),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(12),
+          topRight: Radius.circular(12),
+        ),
+        child: WebViewWidget(controller: _webViewController),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
 
-    final displayArtists = _getDisplayArtists();
-    final title = widget.track['title']?.toString() ?? 'Unknown Title';
-    final likes = widget.track['likes'] ?? 0;
-    final category = widget.track['category']?.toString();
-    final isLiked = _isLikedByUser();
+    final uniqueKey = '${widget.track['_id']}_${widget.track['spotifyId']}';
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Card(
-        color: Colors.grey[900],
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return GestureDetector(
+      onTap: () {
+        if (!_isWebViewInitialized && widget.lazyLoad) {
+          startWebViewLoading();
+        }
+      },
+      child: Container(
+        key: ValueKey(uniqueKey),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 6,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
         child: Column(
           children: [
-            // Header with title and artist info
-            Padding(
-              padding: EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  // Music icon
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.music_note,
-                      color: Colors.orange,
-                      size: 24,
-                    ),
-                  ),
-                  SizedBox(width: 12),
+            // Spotify Embed Section
+            _buildWebViewSection(),
 
-                  // Title and artist info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+            // Action Bar - Compact and Responsive
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey[850],
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
+                ),
+                border: Border(
+                  top: BorderSide(color: Colors.grey[700]!, width: 0.5),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Like Button
+                  if (widget.userId != null)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _toggleLike,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          margin: EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: _isLikedByUser()
+                                ? Colors.red.withOpacity(0.15)
+                                : Colors.grey[700]?.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(12),
+                            border: _isLikedByUser()
+                                ? Border.all(color: Colors.red.withOpacity(0.4), width: 1)
+                                : Border.all(color: Colors.grey[600]!, width: 0.5),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          displayArtists,
-                          style: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 14,
-                          ),
-                          maxLines: 2, // Çoklu sanatçı için 2 satır
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (category != null) ...[
-                          SizedBox(height: 4),
-                          Row(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  category,
-                                  style: TextStyle(
-                                    color: Colors.orange,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                              Icon(
+                                _isLikedByUser() ? Icons.favorite : Icons.favorite_border,
+                                color: _isLikedByUser() ? Colors.red : Colors.white70,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${widget.track['likes'] ?? 0}',
+                                style: TextStyle(
+                                  color: _isLikedByUser() ? Colors.red : Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ],
+                        ),
+                      ),
                     ),
-                  ),
 
-                  // Action buttons
-                  Column(
-                    children: [
-                      // Like button
-                      IconButton(
-                        onPressed: _toggleLike,
-                        icon: Icon(
-                          isLiked ? Icons.favorite : Icons.favorite_border,
-                          color: isLiked ? Colors.red : Colors.grey[400],
-                          size: 20,
-                        ),
-                      ),
-                      Text(
-                        '$likes',
-                        style: TextStyle(
-                          color: Colors.grey[500],
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // More actions menu
-                  PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert, color: Colors.grey[400]),
-                    color: Colors.grey[800],
-                    onSelected: (String choice) {
-                      switch (choice) {
-                        case 'add_to_playlist':
-                          _showPlaylistOptions();
-                          break;
-                        case 'beatport':
-                          _launchBeatportUrl();
-                          break;
-                      }
-                    },
-                    itemBuilder: (BuildContext context) => [
-                      PopupMenuItem<String>(
-                        value: 'add_to_playlist',
-                        child: Row(
-                          children: [
-                            Icon(Icons.playlist_add, color: Colors.white, size: 20),
-                            SizedBox(width: 8),
-                            Text('Playlist\'e Ekle', style: TextStyle(color: Colors.white)),
-                          ],
-                        ),
-                      ),
-                      if (widget.track['beatportUrl'] != null &&
-                          widget.track['beatportUrl'].toString().isNotEmpty)
-                        PopupMenuItem<String>(
-                          value: 'beatport',
+                  // Add to Playlist Button
+                  if (widget.userId != null)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _showAddToPlaylistDialog,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          margin: EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+                          ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.shopping_cart, color: Colors.orange, size: 20),
-                              SizedBox(width: 8),
-                              Text('Beatport\'ta Aç', style: TextStyle(color: Colors.white)),
+                              Icon(
+                                Icons.playlist_add,
+                                color: Colors.blue,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  'Lista',
+                                  style: TextStyle(
+                                    color: Colors.blue,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                    ),
+
+                  // Beatport Button
+                  if (widget.track['beatportUrl']?.isNotEmpty == true)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _launchBeatportUrl,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          margin: EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                'assets/beatport_logo.png',
+                                width: 12,
+                                height: 12,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  'Buy on Beatport',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-
-            // Spotify Player
-            if (_isWebViewInitialized) ...[
-              Container(
-                height: 152,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  ),
-                  child: Stack(
-                    children: [
-                      WebViewWidget(controller: _webViewController),
-                      if (!_isWebViewLoaded)
-                        Container(
-                          color: Colors.black,
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                                  strokeWidth: 2,
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Spotify Player Yükleniyor...',
-                                  style: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ] else if (widget.lazyLoad) ...[
-              // Lazy load button
-              Container(
-                height: 60,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[850],
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  ),
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _initializeWebView,
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(12),
-                      bottomRight: Radius.circular(12),
-                    ),
-                    child: Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.play_circle_filled, color: Colors.orange, size: 28),
-                          SizedBox(width: 8),
-                          Text(
-                            'Player\'ı Yükle',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
