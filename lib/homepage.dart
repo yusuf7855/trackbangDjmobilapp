@@ -2,12 +2,14 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import './url_constants.dart';
 import './create_playlist.dart';
+import './standardized_playlist_dialog.dart';
 import './menu/listeler_screen.dart';
 import './menu/sample_bank_screen.dart';
 import './menu/mostening_screen.dart';
@@ -20,7 +22,7 @@ import './common_music_player.dart';
 import './top10_music_card.dart';
 
 class HomeScreen extends StatefulWidget {
-  final VoidCallback? onMenuPressed; // Menu butonuna basılınca çağrılacak fonksiyon
+  final VoidCallback? onMenuPressed;
 
   const HomeScreen({Key? key, this.onMenuPressed}) : super(key: key);
 
@@ -41,6 +43,9 @@ class _HomeScreenState extends State<HomeScreen>
   // Loading states
   bool isLoadingTop10 = true;
   bool isLoadingHouse = true;
+
+  // WebView Cache sistemi
+  final Map<String, WebViewController> _preloadedControllers = {};
 
   // Preloading management for Top10
   final Map<String, bool> _top10WebViewLoadedStatus = {};
@@ -139,24 +144,12 @@ class _HomeScreenState extends State<HomeScreen>
         if (mounted) {
           final top10Map = Map<String, List<dynamic>>.from(data['top10']);
 
-          // Collect all track IDs for preloading
-          final allTrackIds = <String>{};
-          top10Map.values.forEach((tracks) {
-            tracks.forEach((track) {
-              final trackId = track['_id']?.toString();
-              if (trackId != null) {
-                allTrackIds.add(trackId);
-              }
-            });
-          });
-
           setState(() {
             top10Data = top10Map;
-            _allTop10TrackIds.addAll(allTrackIds);
           });
 
-          // Start preloading WebViews
-          await _preloadTop10WebViews();
+          // WebView'ları data yüklendikten hemen sonra başlat
+          await _preloadAllWebViews();
         }
       }
     } catch (e) {
@@ -168,16 +161,69 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _preloadTop10WebViews() async {
-    print('Starting to preload ${_allTop10TrackIds.length} Top10 WebViews');
+  // Yeni preloading metodu - Her şarkı için benzersiz cache key
+  Future<void> _preloadAllWebViews() async {
+    print('Starting to preload ALL WebViews...');
 
-    // Initialize loading status for all tracks
-    for (final trackId in _allTop10TrackIds) {
-      _top10WebViewLoadedStatus[trackId] = false;
+    final List<Map<String, String>> allTracks = [];
+
+    // Tüm kategorilerdeki tüm şarkıları topla - Her şarkı için benzersiz key
+    top10Data.forEach((categoryKey, tracks) {
+      for (int i = 0; i < tracks.length; i++) {
+        final track = tracks[i];
+        final spotifyId = track['spotifyId']?.toString();
+        final trackId = track['_id']?.toString() ?? '';
+
+        if (spotifyId != null && spotifyId.isNotEmpty) {
+          // Benzersiz cache key: category_trackId_spotifyId
+          final uniqueKey = '${categoryKey}_${trackId}_${spotifyId}';
+          allTracks.add({
+            'uniqueKey': uniqueKey,
+            'spotifyId': spotifyId,
+            'title': track['title'] ?? 'Unknown',
+            'category': categoryKey,
+            'trackId': trackId,
+          });
+        }
+      }
+    });
+
+    print('Total tracks to preload: ${allTracks.length}');
+
+    // Batch'ler halinde yükle (5'erli gruplar)
+    const batchSize = 5;
+    int loadedCount = 0;
+
+    for (int i = 0; i < allTracks.length; i += batchSize) {
+      final batch = allTracks.skip(i).take(batchSize).toList();
+
+      print('Loading batch ${(i ~/ batchSize) + 1}: ${batch.map((t) => t['title']).join(', ')}');
+
+      // Bu batch'i paralel yükle
+      final batchFutures = batch.map((track) =>
+          _preloadSingleWebView(
+              track['uniqueKey']!,
+              track['spotifyId']!,
+              track['title']!
+          ).then((_) {
+            loadedCount++;
+            print('✓ Loaded $loadedCount/${allTracks.length}: ${track['title']} (${track['category']})');
+          }).catchError((e) {
+            loadedCount++;
+            print('✗ Failed $loadedCount/${allTracks.length}: ${track['title']} - $e');
+          })
+      ).toList();
+
+      // Bu batch'in tamamlanmasını bekle
+      await Future.wait(batchFutures);
+
+      // Batch'ler arası kısa bekleme (sistem nefes alsın)
+      if (i + batchSize < allTracks.length) {
+        await Future.delayed(Duration(milliseconds: 200));
+      }
     }
 
-    // Hızlandırılmış yükleme süresi - 2 saniye
-    await Future.delayed(Duration(seconds: 2));
+    print('🎉 All WebViews preloaded successfully! Total: $loadedCount');
 
     if (mounted) {
       setState(() {
@@ -189,28 +235,85 @@ class _HomeScreenState extends State<HomeScreen>
     _loadingAnimationController.stop();
   }
 
-  void _onTop10WebViewLoaded(String trackId) {
-    print('Top10 WebView loaded for track: $trackId');
-
-    if (mounted) {
-      setState(() {
-        _top10WebViewLoadedStatus[trackId] = true;
-      });
-
-      // Check if all WebViews are loaded
-      final loadedCount = _top10WebViewLoadedStatus.values.where((loaded) => loaded).length;
-      final totalCount = _allTop10TrackIds.length;
-
-      print('Top10 WebViews loaded: $loadedCount/$totalCount');
-
-      if (loadedCount >= totalCount && !_allTop10WebViewsLoaded) {
-        setState(() {
-          isLoadingTop10 = false;
-          _allTop10WebViewsLoaded = true;
-        });
-        _loadingAnimationController.stop();
-        print('All Top10 WebViews loaded!');
+  // Tek WebView preload metodu - Benzersiz key ile
+  Future<void> _preloadSingleWebView(String uniqueKey, String spotifyId, String trackTitle) async {
+    try {
+      // Eğer zaten cache'de varsa skip et
+      if (_preloadedControllers.containsKey(uniqueKey)) {
+        print('Already cached: $trackTitle');
+        return;
       }
+
+      final controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(Colors.transparent)
+        ..setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15')
+        ..enableZoom(false);
+
+      // Basit ve hızlı yükleme - sadece temel setup
+      final completer = Completer<void>();
+      bool isCompleted = false;
+
+      controller.setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (url) {
+            print('Starting load: $trackTitle');
+          },
+          onPageFinished: (url) async {
+            if (isCompleted) return;
+
+            try {
+              // Minimal JavaScript - sadece gerekli olanlar
+              await controller.runJavaScript('''
+                document.body.style.margin = '0';
+                document.body.style.padding = '0';
+                document.body.style.overflow = 'hidden';
+              ''');
+
+              // Daha kısa bekleme
+              await Future.delayed(Duration(milliseconds: 100));
+
+              if (!isCompleted) {
+                isCompleted = true;
+                completer.complete();
+              }
+            } catch (e) {
+              if (!isCompleted) {
+                isCompleted = true;
+                completer.complete();
+              }
+            }
+          },
+          onWebResourceError: (error) {
+            if (!isCompleted) {
+              isCompleted = true;
+              completer.complete();
+            }
+          },
+        ),
+      );
+
+      // URL yükle
+      await controller.loadRequest(
+          Uri.parse('https://open.spotify.com/embed/track/$spotifyId?utm_source=generator&theme=0')
+      );
+
+      // Daha kısa timeout (5 saniye)
+      await Future.any([
+        completer.future,
+        Future.delayed(Duration(seconds: 5)).then((_) {
+          if (!isCompleted) {
+            isCompleted = true;
+            completer.complete();
+          }
+        }),
+      ]);
+
+      // Cache'e benzersiz key ile kaydet
+      _preloadedControllers[uniqueKey] = controller;
+
+    } catch (e) {
+      print('Failed to preload $trackTitle: $e');
     }
   }
 
@@ -288,7 +391,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           SizedBox(height: 30),
           Text(
-            'İçerikler Yükleniyor...',
+            'Spotify Player\'lar Yükleniyor...',
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 18,
@@ -297,10 +400,19 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           SizedBox(height: 20),
           Text(
-            'Spotify player\'lar hazırlanıyor',
+            'Tüm kategoriler hazırlanıyor (5\'li gruplar)',
             style: TextStyle(
               color: Colors.white.withOpacity(0.6),
               fontSize: 14,
+            ),
+          ),
+          SizedBox(height: 10),
+          // Progress indicator
+          Container(
+            width: 200,
+            child: LinearProgressIndicator(
+              backgroundColor: Colors.grey[800],
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
             ),
           ),
         ],
@@ -326,7 +438,7 @@ class _HomeScreenState extends State<HomeScreen>
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: SizedBox(height: 16),
+          child: SizedBox(height: 0), // 16'dan 8'e düşürüldü
         ),
         SliverList(
           delegate: SliverChildBuilderDelegate(
@@ -348,32 +460,102 @@ class _HomeScreenState extends State<HomeScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Basit başlık - sola dayalı
+          // Basit başlık - sola dayalı ve modern font
           Container(
-            margin: const EdgeInsets.only(left: 8), // Sol margin azaltıldı
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12), // Padding azaltıldı
+            margin: const EdgeInsets.only(left: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             child: Text(
-              '# $title',  // Başına # ekle
+              '# $title',
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+                fontSize: 22,
+                fontWeight: FontWeight.w300, // Light weight
+                fontStyle: FontStyle.italic, // İtalik
+                letterSpacing: 0, // Daha geniş harf aralığı
+                shadows: [
+                  Shadow(
+                    offset: Offset(1.0, 1.0),
+                    blurRadius: 3.0,
+                    color: Colors.black54,
+                  ),
+                ],
               ),
             ),
           ),
 
-          // Top10MusicCard widget'ı - sağ sol margin ile, tüm frameler preload
+          // Şarkılar - Cache'den benzersiz key ile al
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8), // Sağ sol boşluk
+            margin: const EdgeInsets.symmetric(horizontal: 8),
             child: Column(
-              children: tracks.map<Widget>((music) {
+              children: tracks.asMap().entries.map<Widget>((entry) {
+                final index = entry.key;
+                final music = entry.value;
+                final spotifyId = music['spotifyId']?.toString();
+                final trackId = music['_id']?.toString() ?? '';
+
+                // Benzersiz cache key oluştur
+                final categoryKey = _getCategoryKey(title);
+                final uniqueKey = '${categoryKey}_${trackId}_${spotifyId}';
+
+                // Cache'de varsa direkt WebView göster
+                if (spotifyId != null && _preloadedControllers.containsKey(uniqueKey)) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[900]?.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey[700]!, width: 0.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        // Cache'den alınan WebView
+                        Container(
+                          height: 80,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(10),
+                              topRight: Radius.circular(10),
+                            ),
+                            child: WebViewWidget(controller: _preloadedControllers[uniqueKey]!),
+                          ),
+                        ),
+                        // Action buttons bölümü - Tüm butonlar dahil
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[850],
+                            borderRadius: BorderRadius.only(
+                              bottomLeft: Radius.circular(10),
+                              bottomRight: Radius.circular(10),
+                            ),
+                            border: Border(
+                              top: BorderSide(color: Colors.grey[700]!, width: 0.5),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: _buildCachedActionButtons(music),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // Cache'de yoksa normal CommonMusicPlayer (fallback)
                 return CommonMusicPlayer(
-                  key: ValueKey('top10_${music['_id']}_${title}'),
+                  key: ValueKey('top10_${music['_id']}_${title}_$index'),
                   track: music,
                   userId: userId,
-                  preloadWebView: true, // Hızlı preload
-                  lazyLoad: false, // Lazy loading kapalı
+                  preloadWebView: true,
+                  lazyLoad: false,
                   onLikeChanged: () {
                     _loadTop10Data();
                   },
@@ -384,6 +566,249 @@ class _HomeScreenState extends State<HomeScreen>
         ],
       ),
     );
+  }
+
+  // Kategori title'ından key oluşturmak için helper metod
+  String _getCategoryKey(String title) {
+    switch (title) {
+      case 'Trackbang Top 10':
+        return 'all';
+      case 'Afro House':
+        return 'afrohouse';
+      case 'Indie Dance':
+        return 'indiedance';
+      case 'Organic House':
+        return 'organichouse';
+      case 'Down Tempo':
+        return 'downtempo';
+      case 'Melodic House':
+        return 'melodichouse';
+      default:
+        return title.toLowerCase().replaceAll(' ', '');
+    }
+  }
+
+  // Cache'li şarkılar için action buttons
+  List<Widget> _buildCachedActionButtons(Map<String, dynamic> music) {
+    List<Widget> buttons = [];
+
+    // Like Button
+    if (userId != null) {
+      buttons.add(
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _toggleLike(music),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              margin: EdgeInsets.symmetric(horizontal: 1),
+              decoration: BoxDecoration(
+                color: _isLikedByUser(music)
+                    ? Colors.red.withOpacity(0.15)
+                    : Colors.grey[700]?.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(8),
+                border: _isLikedByUser(music)
+                    ? Border.all(color: Colors.red.withOpacity(0.4), width: 1)
+                    : Border.all(color: Colors.grey[600]!, width: 0.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _isLikedByUser(music) ? Icons.favorite : Icons.favorite_border,
+                    color: _isLikedByUser(music) ? Colors.red : Colors.white70,
+                    size: 12,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    '${music['likes'] ?? 0}',
+                    style: TextStyle(
+                      color: _isLikedByUser(music) ? Colors.red : Colors.white70,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Playlist Button
+    if (userId != null) {
+      buttons.add(
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _showAddToPlaylistDialog(music),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              margin: EdgeInsets.symmetric(horizontal: 1),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.playlist_add,
+                    color: Colors.blue,
+                    size: 12,
+                  ),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      'Playliste Ekle',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Beatport Button
+    if (music['beatportUrl']?.isNotEmpty == true) {
+      buttons.add(
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _launchBeatportUrl(music['beatportUrl']),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              margin: EdgeInsets.symmetric(horizontal: 1),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withOpacity(0.3), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/beatport_logo.png',
+                    width: 10,
+                    height: 10,
+                  ),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      'Beatport',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return buttons;
+  }
+
+  // Helper methods for like functionality
+  bool _isLikedByUser(Map<String, dynamic> music) {
+    if (userId == null) return false;
+    final userLikes = List<String>.from(music['userLikes'] ?? []);
+    return userLikes.contains(userId);
+  }
+
+  Future<void> _toggleLike(Map<String, dynamic> music) async {
+    if (userId == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final response = await http.post(
+        Uri.parse('${UrlConstants.apiBaseUrl}/api/music/${music['_id']}/like'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'userId': userId}),
+      );
+
+      if (response.statusCode == 200) {
+        final currentLikes = music['likes'] ?? 0;
+        final userLikes = List<String>.from(music['userLikes'] ?? []);
+
+        if (mounted) {
+          setState(() {
+            if (userLikes.contains(userId)) {
+              userLikes.remove(userId);
+              music['likes'] = currentLikes - 1;
+            } else {
+              userLikes.add(userId!);
+              music['likes'] = currentLikes + 1;
+            }
+            music['userLikes'] = userLikes;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error toggling like: $e');
+    }
+  }
+
+  // Playlist dialog'u göster - CategoryPage ile aynı
+  void _showAddToPlaylistDialog(Map<String, dynamic> music) {
+    if (userId == null) return;
+
+    StandardizedPlaylistDialog.show(
+      context: context,
+      track: music,
+      userId: userId,
+      onPlaylistUpdated: () {
+        _loadTop10Data(); // Top10 verilerini yenile
+      },
+    );
+  }
+
+  // Bu metodları kaldırabiliriz - artık StandardizedPlaylistDialog kullanıyoruz
+  // Eski metodlar yerine StandardizedPlaylistDialog kullanılıyor
+
+  // Beatport URL'ini aç
+  Future<void> _launchBeatportUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Beatport linki açılamadı'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Hata: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // World tab uses the separate WorldPage
@@ -449,7 +874,7 @@ class _HomeScreenState extends State<HomeScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Modern playlist header - minimalist design like Top10
+          // Modern playlist header
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -527,7 +952,7 @@ class _HomeScreenState extends State<HomeScreen>
 
           const SizedBox(height: 12),
 
-          // Music cards - minimalist style like Top10
+          // Music cards
           if (musics.isNotEmpty)
             ...musics.map((music) => Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -579,19 +1004,19 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
-        automaticallyImplyLeading: false, // Default leading'i kapat
+        automaticallyImplyLeading: false,
         title: Row(
           children: [
-            // Menu button - MainHomePage'deki drawer'ı açacak
+            // Menu button
             IconButton(
               icon: Icon(Icons.menu, color: Colors.white, size: 28),
-              onPressed: widget.onMenuPressed, // Parent'tan gelen fonksiyonu çağır
-              padding: EdgeInsets.zero, // Padding'i kaldır
+              onPressed: widget.onMenuPressed,
+              padding: EdgeInsets.zero,
             ),
 
-            // Logo - direkt yanında
+            // Logo
             Container(
-              margin: EdgeInsets.only(left: 4), // Minimal margin
+              margin: EdgeInsets.only(left: 4),
               child: Image.asset(
                 'assets/your_logo.png',
                 height: 40,
@@ -599,9 +1024,9 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
 
-            Spacer(), // Sağ taraftaki iconları itmek için
+            Spacer(),
 
-            // Actions manually added
+            // Actions
             IconButton(
               icon: Icon(Icons.notifications_none, color: Colors.white),
               onPressed: () {

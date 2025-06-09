@@ -333,12 +333,13 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
     }
   }
 
+
   Widget _buildWebViewSection() {
     final spotifyId = widget.track['spotifyId']?.toString();
 
     if (spotifyId == null || spotifyId.isEmpty) {
       return Container(
-        height: 80, // Daha kompakt
+        height: 80,
         decoration: BoxDecoration(
           color: Colors.grey[800],
           borderRadius: BorderRadius.only(
@@ -362,11 +363,12 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
       );
     }
 
+    // Lazy loading için - sadece tıklanınca yükle
     if (!_isWebViewInitialized && (widget.lazyLoad && !widget.preloadWebView)) {
       return GestureDetector(
         onTap: _initializeWebView,
         child: Container(
-          height: 80, // Daha kompakt
+          height: 80,
           decoration: BoxDecoration(
             color: Colors.grey[800],
             borderRadius: BorderRadius.only(
@@ -391,32 +393,30 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
       );
     }
 
-    if (!_isWebViewLoaded) {
+    // Arka planda yükleniyor - Placeholder göster
+    if (_isWebViewInitialized && !_isWebViewLoaded) {
       return Container(
-        height: 80, // Daha kompakt
+        height: 80,
         decoration: BoxDecoration(
-          color: Colors.grey[800],
+          color: Colors.grey[850],
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(10),
             topRight: Radius.circular(10),
           ),
         ),
         child: Center(
-          child: Column(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-              SizedBox(height: 6),
+              Icon(Icons.music_note, color: Colors.grey[400], size: 20),
+              SizedBox(width: 8),
               Text(
-                'Loading...',
-                style: TextStyle(color: Colors.white, fontSize: 10),
+                'Spotify Player',
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),
@@ -424,8 +424,9 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
       );
     }
 
+    // WebView tamamen yüklenmiş - Göster
     return Container(
-      height: 80, // Daha kompakt Spotify frame
+      height: 80,
       child: ClipRRect(
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(10),
@@ -509,7 +510,7 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                   const SizedBox(width: 3),
                   Flexible(
                     child: Text(
-                      'Lista',
+                      'Playliste Ekle',
                       style: TextStyle(
                         color: Colors.blue,
                         fontSize: 9,
