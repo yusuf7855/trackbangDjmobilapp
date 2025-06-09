@@ -101,7 +101,7 @@ class _MainHomePageState extends State<MainHomePage> {
     // HomeScreen'e drawer'ı açma fonksiyonunu geçiyoruz
     _pages = [
       HomeScreen(onMenuPressed: _openDrawer),
-      SearchScreen(),
+      SearchPage(),
       MyBangsScreen(),
       ProfileScreen(),
     ];
