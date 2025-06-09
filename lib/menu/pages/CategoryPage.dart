@@ -157,8 +157,22 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
   Future<void> _autoExpandAndScroll() async {
     if (widget.autoExpandPlaylistId == null) return;
 
+    print('CategoryPage: Starting auto expand and scroll for playlist: ${widget.autoExpandPlaylistId}');
+
     // Biraz bekle ki widget'lar tam oluşsun
     await Future.delayed(Duration(milliseconds: 500));
+
+    // Playlist'in gerçekten var olup olmadığını kontrol et
+    final playlistExists = adminPlaylists.any((playlist) =>
+    playlist['_id']?.toString() == widget.autoExpandPlaylistId);
+
+    if (!playlistExists) {
+      print('CategoryPage: Playlist not found in adminPlaylists: ${widget.autoExpandPlaylistId}');
+      print('CategoryPage: Available playlists: ${adminPlaylists.map((p) => p['_id']).toList()}');
+      return;
+    }
+
+    print('CategoryPage: Playlist found, expanding: ${widget.autoExpandPlaylistId}');
 
     // Playlist'i aç
     await _togglePlaylist(widget.autoExpandPlaylistId!);
@@ -170,6 +184,7 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
     if (_playlistKeys.containsKey(widget.autoExpandPlaylistId)) {
       final context = _playlistKeys[widget.autoExpandPlaylistId]!.currentContext;
       if (context != null) {
+        print('CategoryPage: Scrolling to playlist position');
         await Scrollable.ensureVisible(
           context,
           duration: Duration(milliseconds: 800),
@@ -179,35 +194,27 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
 
         // Eğer vurgulanacak müzik varsa, onu da vurgula
         if (widget.highlightMusicId != null) {
+          print('CategoryPage: Highlighting music: ${widget.highlightMusicId}');
           _highlightMusic(widget.highlightMusicId!);
         }
+      } else {
+        print('CategoryPage: Context not found for playlist key');
       }
+    } else {
+      print('CategoryPage: Playlist key not found: ${widget.autoExpandPlaylistId}');
+      print('CategoryPage: Available keys: ${_playlistKeys.keys.toList()}');
     }
-  }
-
-  void _highlightMusic(String musicId) {
-    // Müziği vurgulamak için basit bir SnackBar göster
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Aradığınız şarkı bu playlist\'te bulunuyor!'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'Tamam',
-          textColor: Colors.white,
-          onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          },
-        ),
-      ),
-    );
   }
 
   Future<void> _togglePlaylist(String playlistId) async {
     if (playlistId.isEmpty) return;
 
+    print('CategoryPage: Toggling playlist: $playlistId');
+    print('CategoryPage: Current expanded playlist: $expandedPlaylistId');
+
     // Eğer tıklanan playlist zaten açıksa kapat
     if (expandedPlaylistId == playlistId) {
+      print('CategoryPage: Closing already expanded playlist');
       setState(() {
         expandedPlaylistId = null;
       });
@@ -238,16 +245,39 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
       isLoadingMusics[playlistId] = true;
     });
 
+    print('CategoryPage: Playlist expanded: $playlistId');
+    print('CategoryPage: Music count for playlist: ${(playlistMusics[playlistId] ?? []).length}');
+
     // Eğer bu playlist'in müzikleri daha önce preload edilmemişse preload et
     if (!(_allMusicPlayersLoaded[playlistId] ?? false)) {
+      print('CategoryPage: Starting preload for playlist: $playlistId');
       await _preloadMusicPlayers(playlistId);
     } else {
       // Zaten preload edilmişse sadece loading'i kapat
+      print('CategoryPage: Playlist already preloaded, stopping loading');
       setState(() {
         isLoadingMusics[playlistId] = false;
       });
     }
   }
+  void _highlightMusic(String musicId) {
+    // Müziği vurgulamak için basit bir SnackBar göster
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Aradığınız şarkı bu playlist\'te bulunuyor!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Tamam',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
+
 
   Future<void> _preloadMusicPlayers(String playlistId) async {
     if (playlistId.isEmpty) return;
