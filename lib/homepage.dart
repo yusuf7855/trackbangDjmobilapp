@@ -176,8 +176,8 @@ class _HomeScreenState extends State<HomeScreen>
       _top10WebViewLoadedStatus[trackId] = false;
     }
 
-    // Gerçek yükleme süresini bekle - daha uzun süre
-    await Future.delayed(Duration(seconds: 5));
+    // Hızlandırılmış yükleme süresi - 2 saniye
+    await Future.delayed(Duration(seconds: 2));
 
     if (mounted) {
       setState(() {
@@ -343,101 +343,44 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildCategorySection(String title, List<dynamic> tracks) {
-    // Category icon mapping
-    IconData getCategoryIcon(String title) {
-      if (title.toLowerCase().contains('overall')) return Icons.music_note;
-      if (title.toLowerCase().contains('afro')) return Icons.music_note;
-      if (title.toLowerCase().contains('indie')) return Icons.music_note;
-      if (title.toLowerCase().contains('organic')) return Icons.music_note;
-      if (title.toLowerCase().contains('tempo')) return Icons.music_note;
-      if (title.toLowerCase().contains('melodic')) return Icons.music_note;
-      return Icons.queue_music;
-    }
-
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Modern category header
+          // Basit başlık - sola dayalı
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[800]!, width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    getCategoryIcon(title),
-                    color: Colors.black,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${tracks.length}',
-                    style: TextStyle(
-                      color: Colors.grey[300],
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+            margin: const EdgeInsets.only(left: 8), // Sol margin azaltıldı
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12), // Padding azaltıldı
+            child: Text(
+              '# $title',  // Başına # ekle
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
 
-          const SizedBox(height: 12),
-
-          // Music cards
-          ...tracks.asMap().entries.map((entry) {
-            final index = entry.key;
-            final track = entry.value;
-            final trackId = track['_id']?.toString() ?? '';
-
-            return CommonMusicPlayer(
-              track: track,
-              userId: userId,
-              preloadWebView: true,
-              lazyLoad: false,
-              onLikeChanged: () {
-                _loadTop10Data();
-              },
-            );
-          }).toList(),
+          // Top10MusicCard widget'ı - sağ sol margin ile, tüm frameler preload
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8), // Sağ sol boşluk
+            child: Column(
+              children: tracks.map<Widget>((music) {
+                return CommonMusicPlayer(
+                  key: ValueKey('top10_${music['_id']}_${title}'),
+                  track: music,
+                  userId: userId,
+                  preloadWebView: true, // Hızlı preload
+                  lazyLoad: false, // Lazy loading kapalı
+                  onLikeChanged: () {
+                    _loadTop10Data();
+                  },
+                );
+              }).toList(),
+            ),
+          ),
         ],
       ),
     );
