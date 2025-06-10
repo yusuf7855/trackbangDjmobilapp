@@ -1,4 +1,3 @@
-import 'package:djmobilapp/screens/dm_inbox_screen.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -1037,15 +1036,8 @@ class _HomeScreenState extends State<HomeScreen>
             IconButton(
               icon: Icon(Icons.message_outlined, color: Colors.white),
               onPressed: () {
-                // DM kutusu ekranına yönlendir
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => DMInboxScreen(),
-                  ),
-                );
+                // DM action
               },
-              tooltip: 'Mesajlar',
             ),
           ],
         ),
