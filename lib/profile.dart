@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'profile_playlist_card.dart'; // YENİ IMPORT
 import './url_constants.dart';
+import './screens/dm_inbox_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -697,7 +698,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                           backgroundImage: _getProfileImage(),
                         ),
                       ),
-                      if (isCurrentUser && !isEditing)
+                      if (!isEditing)
                         Positioned(
                           bottom: 0,
                           right: 0,
@@ -710,14 +711,14 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                             child: IconButton(
                               icon: _isUpdatingImage
                                   ? const SizedBox(
-                                width: 18,
-                                height: 18,
+                                width: 20,
+                                height: 20,
                                 child: CircularProgressIndicator(
                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                                   strokeWidth: 2,
                                 ),
                               )
-                                  : const Icon(Icons.camera_alt, size: 18),
+                                  : const Icon(Icons.camera_alt, size: 20),
                               onPressed: _isUpdatingImage ? null : _pickImage,
                               color: Colors.black,
                             ),
@@ -727,104 +728,97 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   ),
                 ],
               ),
-              const SizedBox(width: 24),
-
-              // Profil bilgileri
+              const SizedBox(width: 20),
+              // Kullanıcı bilgileri ve butonlar
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // İsim ve kullanıcı adı
-                    Text(
-                      '${userData?['firstName']} ${userData?['lastName']}',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '@${userData?['username']}',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // İstatistikler
-                    Row(
-                      children: [
-                        _buildCompactStat(followerCount, "Takipçi"),
-                        const SizedBox(width: 50),
-                        _buildCompactStat(followingCount, "Takip"),
-                        const SizedBox(width: 50),
-                        _buildCompactStat(playlists.length, "Bangs"),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Biyografi
-                    if (userData?['bio'] != null && userData!['bio'].isNotEmpty)
+                    if (isEditing) ...[
+                      _buildModernTextField(_firstNameController, 'Ad', Icons.person),
+                      const SizedBox(height: 12),
+                      _buildModernTextField(_lastNameController, 'Soyad', Icons.person_outline),
+                    ] else ...[
                       Text(
-                        userData!['bio'],
+                        '${userData?['firstName']} ${userData?['lastName']}',
                         style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 15,
-                          height: 1.4,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Linkler
-          if (_profileLinks.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: _profileLinks.map((link) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[900],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[700]!),
-                  ),
-                  child: InkWell(
-                    onTap: () => _launchURL(link['url']!),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      child: Row(
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800],
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: Colors.grey[600]!),
+                        ),
+                        child: Text(
+                          '@${userData?['username']}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Mesaj ikonu burada - kendi profilinde
+                      Row(
                         children: [
-                          const Icon(Icons.open_in_new, color: Colors.white70, size: 20),
+                          // DM kutusu ikonu
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.message, color: Colors.white),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => DMInboxScreen(),
+                                  ),
+                                );
+                              },
+                              tooltip: 'Mesajlar',
+                            ),
+                          ),
                           const SizedBox(width: 12),
+                          // Düzenle butonu
                           Expanded(
-                            child: Text(
-                              link['title']!,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  isEditing = !isEditing;
+                                  if (isEditing) {
+                                    _firstNameController.text = userData?['firstName'] ?? '';
+                                    _lastNameController.text = userData?['lastName'] ?? '';
+                                    _bioController.text = userData?['bio'] ?? '';
+                                  }
+                                });
+                              },
+                              icon: Icon(isEditing ? Icons.close : Icons.edit),
+                              label: Text(isEditing ? 'İptal' : 'Düzenle'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isEditing ? Colors.red : Colors.grey[800],
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-
-          // Buton: Takip / Profili Düzenle
-          Center(
-            child: isCurrentUser
-                ? _buildEditButton()
-                : _buildFollowButton(),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
