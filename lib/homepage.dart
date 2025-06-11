@@ -391,21 +391,14 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           SizedBox(height: 30),
           Text(
-            'Spotify Player\'lar Yükleniyor...',
+            'Trackbang Yükleniyor...',
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 18,
               letterSpacing: 1.5,
             ),
           ),
-          SizedBox(height: 20),
-          Text(
-            'Tüm kategoriler hazırlanıyor (5\'li gruplar)',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.6),
-              fontSize: 14,
-            ),
-          ),
+
           SizedBox(height: 10),
           // Progress indicator
           Container(
