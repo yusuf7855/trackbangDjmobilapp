@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../url_constants.dart';
-import '../common_music_player.dart';
+import './url_constants.dart';
+import './common_music_player.dart';
 
 class WorldPage extends StatefulWidget {
   final String? userId;
@@ -10,34 +10,44 @@ class WorldPage extends StatefulWidget {
   const WorldPage({Key? key, this.userId}) : super(key: key);
 
   @override
-  State<WorldPage> createState() => _WorldPageState();
+  _WorldPageState createState() => _WorldPageState();
 }
 
-class _WorldPageState extends State<WorldPage>
-    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
-  @override
-  bool get wantKeepAlive => true;
-
+class _WorldPageState extends State<WorldPage> with TickerProviderStateMixin {
   List<dynamic> worldPlaylists = [];
+  List<dynamic> filteredPlaylists = [];
   bool isLoading = true;
   bool hasError = false;
   String errorMessage = '';
 
-  // Preloading management
-  final Map<String, List<Widget>> _preloadedMusicPlayers = {};
-  final Map<String, bool> _playlistPreloadStatus = {};
-  final Map<String, bool> _expandedStates = {}; // Track expansion states
-  bool _allPlaylistsPreloaded = false;
+  // Filtreleme ve sıralama değişkenleri - Tamamen güncellenmiş
+  String selectedGenre = 'Genre Filter';
+  String sortOrder = 'Newest First';
 
-  // Loading animation
+  // Sadece belirtilen genre'lar ve düzgün görünen isimler
+  final List<Map<String, String>> genres = [
+    {'display': 'Genre Filter', 'value': 'all'},
+    {'display': 'Afro House', 'value': 'afrohouse'},
+    {'display': 'Indie Dance', 'value': 'indiedance'},
+    {'display': 'Organic House', 'value': 'organichouse'},
+    {'display': 'Down Tempo', 'value': 'downtempo'},
+    {'display': 'Melodic House', 'value': 'melodichouse'},
+  ];
+
+  // Preloading için değişkenler
   late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-  late Animation<Color?> _colorAnimation;
+  Map<String, bool> _expandedStates = {};
+  Map<String, List<Widget>> _preloadedMusicPlayers = {};
+  Map<String, bool> _playlistPreloadStatus = {};
+  bool _allPlaylistsPreloaded = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeAnimation();
+    _animationController = AnimationController(
+      duration: Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
     _loadWorldPlaylists();
   }
 
@@ -45,25 +55,6 @@ class _WorldPageState extends State<WorldPage>
   void dispose() {
     _animationController.dispose();
     super.dispose();
-  }
-
-  void _initializeAnimation() {
-    _animationController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-
-    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.15).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
-    );
-
-    _colorAnimation = ColorTween(
-      begin: Colors.white.withOpacity(0.8),
-      end: Colors.white,
-    ).animate(_animationController);
   }
 
   Future<void> _loadWorldPlaylists() async {
@@ -75,30 +66,59 @@ class _WorldPageState extends State<WorldPage>
       errorMessage = '';
     });
 
+    _animationController.repeat();
+
     try {
+      // Query parametrelerini oluştur
+      String queryParams = 'page=1&limit=50';
+
+      // Genre filtresi varsa ekle
+      if (selectedGenre != 'Genre Filter') {
+        String apiGenre = genres.firstWhere((g) => g['display'] == selectedGenre)['value'] ?? 'all';
+        if (apiGenre != 'all') {
+          queryParams += '&genre=$apiGenre';
+        }
+      }
+
+      // Sıralama parametrelerini ekle
+      queryParams += '&sortBy=createdAt';
+      queryParams += '&sortOrder=${sortOrder == 'Newest First' ? 'desc' : 'asc'}';
+
       final response = await http.get(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists/public-world'),
+        Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists/public-world?$queryParams'),
+        headers: {'Content-Type': 'application/json'},
       );
 
+      print('API Response Status: ${response.statusCode}');
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (mounted) {
-          final playlists = data['playlists'] ?? [];
+        print('API Response Body (first 500 chars): ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
+      } else {
+        print('API Response Body: ${response.body}');
+      }
 
-          // Pre-process and preload playlists
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        print('Parsed response data: ${responseData['success']}');
+        if (responseData['playlists'] != null && responseData['playlists'].isNotEmpty) {
+          print('First playlist owner: ${responseData['playlists'][0]['owner']}');
+        }
+        if (responseData['success'] == true) {
+          final playlists = responseData['playlists'] as List<dynamic>? ?? [];
+
           await _preprocessAndPreloadPlaylists(playlists);
 
           setState(() {
             worldPlaylists = playlists;
+            filteredPlaylists = playlists;
           });
 
-          // Wait for all preloading to complete
           await _waitForPreloadingComplete();
         }
       } else {
-        throw Exception('Failed to load playlists: ${response.statusCode}');
+        throw Exception('API Error: ${response.statusCode}');
       }
     } catch (e) {
+      print('Error loading playlists: $e');
       if (mounted) {
         setState(() {
           isLoading = false;
@@ -117,7 +137,6 @@ class _WorldPageState extends State<WorldPage>
       final playlistId = playlist['_id']?.toString();
       if (playlistId == null) continue;
 
-      // Initialize states
       _expandedStates[playlistId] = false;
       _playlistPreloadStatus[playlistId] = false;
 
@@ -128,16 +147,15 @@ class _WorldPageState extends State<WorldPage>
         continue;
       }
 
-      // Create CommonMusicPlayer widgets for all tracks with preloading enabled
       final List<Widget> musicPlayers = [];
 
       for (final music in musics) {
         final musicPlayer = CommonMusicPlayer(
-          key: ValueKey('world_${playlistId}_${music['_id'] ?? music['spotifyId']}'), // Stable key
+          key: ValueKey('world_${playlistId}_${music['_id'] ?? music['spotifyId']}'),
           track: music,
           userId: widget.userId,
-          preloadWebView: true, // Enable preloading
-          lazyLoad: false, // Disable lazy loading for preloading
+          preloadWebView: true,
+          lazyLoad: false,
           onLikeChanged: () {
             _loadWorldPlaylists();
           },
@@ -158,9 +176,7 @@ class _WorldPageState extends State<WorldPage>
 
   Future<void> _waitForPreloadingComplete() async {
     print('World Page: Waiting for preloading to complete...');
-
-    // Simulate preloading time - in real app this would be based on actual WebView loading
-    await Future.delayed(Duration(seconds: 3));
+    await Future.delayed(Duration(seconds: 2));
 
     if (mounted) {
       setState(() {
@@ -172,338 +188,552 @@ class _WorldPageState extends State<WorldPage>
     }
   }
 
-  Widget _buildLoadingScreen() {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedBuilder(
-              animation: _animationController,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: Text(
-                    'W',
-                    style: TextStyle(
-                      color: _colorAnimation.value,
-                      fontSize: 96,
-                      fontWeight: FontWeight.bold,
-                      fontStyle: FontStyle.italic,
-                      shadows: [
-                        Shadow(
-                          color: Colors.white.withOpacity(0.7),
-                          blurRadius: 15,
-                          offset: Offset(0, 0),
-                        )
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-            SizedBox(height: 30),
-            Text(
-              'World Playlists Yükleniyor...',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
-                fontSize: 18,
-                letterSpacing: 1.5,
-              ),
-            ),
-            SizedBox(height: 20),
-            Text(
-              'Dünya çapında paylaşılan müzikler hazırlanıyor',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _togglePlaylistExpansion(String playlistId) {
+    setState(() {
+      _expandedStates[playlistId] = !(_expandedStates[playlistId] ?? false);
+    });
   }
 
-  // World playlist card section - Dropdown style with performance optimization
-  Widget _buildWorldPlaylistSection(Map<String, dynamic> playlist) {
-    final playlistId = playlist['_id']?.toString() ?? '';
-    final musics = playlist['musics'] as List<dynamic>? ?? [];
-    final owner = playlist['owner'] as Map<String, dynamic>?;
-    final isPreloaded = _playlistPreloadStatus[playlistId] ?? false;
-    final preloadedPlayers = _preloadedMusicPlayers[playlistId] ?? [];
-    final isExpanded = _expandedStates[playlistId] ?? false;
+  String _formatDate(String? dateString) {
+    if (dateString == null) return '';
+    try {
+      DateTime date = DateTime.parse(dateString);
+      return '${date.day}.${date.month}.${date.year}';
+    } catch (e) {
+      return '';
+    }
+  }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), // Minimal spacing
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[800]!, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ExpansionTile(
-        key: ValueKey(playlistId), // Stable key for ExpansionTile
-        initiallyExpanded: isExpanded, // Keep previous state
-        onExpansionChanged: (expanded) {
-          setState(() {
-            _expandedStates[playlistId] = expanded;
-          });
-        },
-        tilePadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4), // Reduced padding
-        childrenPadding: EdgeInsets.only(bottom: 4), // Reduced bottom padding
-        iconColor: Colors.white,
-        collapsedIconColor: Colors.white70,
-        leading: Container(
-          padding: EdgeInsets.all(6), // Smaller icon container
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blue, Colors.purple],
+  String _formatGenreDisplay(String genre) {
+    switch (genre.toLowerCase()) {
+      case 'afrohouse':
+        return 'AFRO HOUSE';
+      case 'indiedance':
+        return 'INDIE DANCE';
+      case 'organichouse':
+        return 'ORGANIC HOUSE';
+      case 'downtempo':
+        return 'DOWN TEMPO';
+      case 'melodichouse':
+        return 'MELODIC HOUSE';
+      default:
+        return genre.toUpperCase();
+    }
+  }
+
+  Widget _buildProfileImage(Map<String, dynamic>? owner) {
+    if (owner == null) {
+      return Container(
+        color: Color(0xFF2A2A2A),
+        child: Icon(
+          Icons.person,
+          color: Colors.grey[600],
+          size: 24,
+        ),
+      );
+    }
+
+    String? profileImagePath = owner['profileImage'];
+
+    // Profil resmi URL'ini oluştur
+    String? imageUrl;
+    if (profileImagePath != null && profileImagePath.isNotEmpty && profileImagePath != 'image.jpg') {
+      // Eğer URL zaten tam ise olduğu gibi kullan
+      if (profileImagePath.startsWith('http')) {
+        imageUrl = profileImagePath;
+      }
+      // Eğer /uploads/ ile başlıyorsa base URL ekle
+      else if (profileImagePath.startsWith('/uploads/')) {
+        imageUrl = '${UrlConstants.apiBaseUrl}$profileImagePath';
+      }
+      // Eğer sadece dosya adı ise /uploads/ ekle
+      else {
+        imageUrl = '${UrlConstants.apiBaseUrl}/uploads/$profileImagePath';
+      }
+    }
+
+    if (imageUrl != null) {
+      return Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          print('Profile image load error: $error');
+          print('Attempted URL: $imageUrl');
+          return Container(
+            color: Color(0xFF2A2A2A),
+            child: Icon(
+              Icons.person,
+              color: Colors.grey[600],
+              size: 24,
             ),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(
-            Icons.public,
-            color: Colors.white,
-            size: 16, // Smaller icon
-          ),
-        ),
-        title: Text(
-          playlist['name'] ?? 'Unnamed World Playlist',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16, // Slightly smaller font
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (owner != null) ...[
-              const SizedBox(height: 1),
-              Text(
-                'by ${owner['displayName'] ?? owner['username'] ?? 'Unknown'}',
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 11, // Smaller subtitle
+          );
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: Color(0xFF2A2A2A),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                      : null,
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
                 ),
               ),
-            ],
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                Icon(Icons.music_note, color: Colors.grey[400], size: 14),
-                const SizedBox(width: 3),
-                Text(
-                  '${musics.length} songs',
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (isPreloaded)
-                  Row(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.green, size: 12),
-                      const SizedBox(width: 3),
-                      Text(
-                        'Ready',
-                        style: TextStyle(
-                          color: Colors.green,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  Text(
-                    'Loading...',
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-              ],
             ),
-          ],
-        ),
-        children: [
-          // Only show children when expanded AND preloaded
-          if (isExpanded) ...[
-            if (isPreloaded && preloadedPlayers.isNotEmpty)
-            // Cached preloaded players - NO re-rendering
-              ...preloadedPlayers.map((player) => Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                child: player,
-              )).toList()
-            else if (!isPreloaded)
-              Container(
-                padding: EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Loading ${musics.length} tracks...',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else if (musics.isEmpty)
-                Container(
-                  padding: EdgeInsets.all(12),
-                  child: Text(
-                    'This playlist is empty',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 11,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-          ],
-        ],
+          );
+        },
+      );
+    }
+
+    // Varsayılan profil resmi
+    return Container(
+      color: Color(0xFF2A2A2A),
+      child: Icon(
+        Icons.person,
+        color: Colors.grey[600],
+        size: 24,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-
-    if (isLoading || !_allPlaylistsPreloaded) {
-      return _buildLoadingScreen();
-    }
-
-    if (hasError) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                color: Colors.red,
-                size: 64,
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Failed to load world playlists',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                errorMessage,
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _loadWorldPlaylists,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                ),
-                child: Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (worldPlaylists.isEmpty) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.playlist_remove,
-                color: Colors.grey[600],
-                size: 64,
-              ),
-              SizedBox(height: 16),
-              Text(
-                'No world playlists found',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Check back later for new content',
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // MAIN BUILD - Dropdown style with minimal spacing
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: RefreshIndicator(
-        onRefresh: _loadWorldPlaylists,
-        color: Colors.white,
-        backgroundColor: Colors.black,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: SizedBox(height: 8), // Reduced top spacing
+      backgroundColor: Color(0xFF0A0A0A),
+      body: Column(
+        children: [
+          // Compact Header with Small Dropdowns
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(
+              color: Color(0xFF0A0A0A),
             ),
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                  final playlist = worldPlaylists[index];
-                  return _buildWorldPlaylistSection(playlist);
+            child: Row(
+              children: [
+                // Genre Filter Dropdown - Small
+                Expanded(
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF111111),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Color(0xFF222222), width: 1),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedGenre,
+                        isExpanded: true,
+                        dropdownColor: Color(0xFF111111),
+                        isDense: true,
+                        style: TextStyle(
+                          color: selectedGenre == 'Genre Filter' ? Colors.grey[400] : Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        icon: Icon(
+                          Icons.expand_more,
+                          color: Colors.grey[400],
+                          size: 17,
+                        ),
+                        items: genres.map((genre) {
+                          return DropdownMenuItem<String>(
+                            value: genre['display']!,
+                            child: Text(
+                              genre['display']!,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: genre['display'] == 'Genre Filter'
+                                    ? Colors.grey[400]
+                                    : Colors.white,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              selectedGenre = newValue;
+                              _loadWorldPlaylists();
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+
+                SizedBox(width: 10),
+
+                // Sort Dropdown - Small
+                Expanded(
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF111111),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Color(0xFF222222), width: 1),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: sortOrder,
+                        isExpanded: true,
+                        dropdownColor: Color(0xFF111111),
+                        isDense: true,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        icon: Icon(
+                          Icons.expand_more,
+                          color: Colors.grey[400],
+                          size: 17,
+                        ),
+                        items: [
+                          DropdownMenuItem<String>(
+                            value: 'Newest First',
+                            child: Text(
+                              'Newest First',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Oldest First',
+                            child: Text(
+                              'Oldest First',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              sortOrder = newValue;
+                              _loadWorldPlaylists();
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Content
+          Expanded(
+            child: isLoading
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: RotationTransition(
+                      turns: _animationController,
+                      child: Icon(
+                        Icons.refresh,
+                        size: 30,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    'Loading...',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            )
+                : hasError
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Color(0xFF2A1A1A),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Icon(
+                      Icons.error_outline,
+                      size: 30,
+                      color: Colors.red[300],
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    'Something went wrong',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    errorMessage,
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _loadWorldPlaylists,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text('Try Again'),
+                  ),
+                ],
+              ),
+            )
+                : filteredPlaylists.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Icon(
+                      Icons.playlist_remove,
+                      size: 30,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    'No playlists found',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    selectedGenre != 'Genre Filter'
+                        ? 'No playlists in $selectedGenre category'
+                        : 'No shared playlists yet',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+                : RefreshIndicator(
+              onRefresh: _loadWorldPlaylists,
+              backgroundColor: Color(0xFF1A1A1A),
+              color: Colors.white,
+              child: ListView.builder(
+                padding: EdgeInsets.all(16),
+                itemCount: filteredPlaylists.length,
+                itemBuilder: (context, index) {
+                  final playlist = filteredPlaylists[index];
+                  final playlistId = playlist['_id']?.toString() ?? '';
+                  final isExpanded = _expandedStates[playlistId] ?? false;
+                  final musicPlayers = _preloadedMusicPlayers[playlistId] ?? [];
+
+                  return Container(
+                    margin: EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF151515),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Color(0xFF2A2A2A), width: 1),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Playlist Header
+                        InkWell(
+                          onTap: () => _togglePlaylistExpansion(playlistId),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Color(0xFF333333), width: 1),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: _buildProfileImage(playlist['owner']),
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            playlist['name'] ?? 'Untitled Playlist',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                playlist['owner']?['displayName'] ?? 'Unknown',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.grey[400],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              Text(
+                                                ' • ${_formatDate(playlist['createdAt'])}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[500],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Color(0xFF2A2A2A),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        isExpanded
+                                            ? Icons.keyboard_arrow_up
+                                            : Icons.keyboard_arrow_down,
+                                        color: Colors.grey[400],
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Color(0xFF2A2A2A),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Color(0xFF404040), width: 1),
+                                      ),
+                                      child: Text(
+                                        _formatGenreDisplay(playlist['genre']?.toString() ?? 'GENRE'),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[300],
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      '${playlist['musicCount'] ?? 0} tracks',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[500],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (playlist['description']?.isNotEmpty == true) ...[
+                                  SizedBox(height: 10),
+                                  Text(
+                                    playlist['description'],
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[300],
+                                      height: 1.4,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Expanded Music List
+                        if (isExpanded && musicPlayers.isNotEmpty)
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Color(0xFF0F0F0F),
+                              borderRadius: BorderRadius.only(
+                                bottomLeft: Radius.circular(16),
+                                bottomRight: Radius.circular(16),
+                              ),
+                              border: Border(
+                                top: BorderSide(color: Color(0xFF2A2A2A), width: 1),
+                              ),
+                            ),
+                            child: Column(
+                              children: musicPlayers,
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
                 },
-                childCount: worldPlaylists.length,
               ),
             ),
-            // Bottom padding
-            SliverToBoxAdapter(
-              child: SizedBox(height: 80), // Reduced bottom spacing
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

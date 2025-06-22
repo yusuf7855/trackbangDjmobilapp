@@ -516,34 +516,23 @@ class _CategoryPageState extends State<CategoryPage> with TickerProviderStateMix
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          playlistName,
+                          '${playlist['subCategory']}',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w500,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                         SizedBox(height: 4),
+
                         Text(
-                          '$musicCount şarkı',
+                          '$musicCount songs',
                           style: TextStyle(
                             color: Colors.grey[400],
-                            fontSize: 14,
+                            fontSize: 10,
                           ),
                         ),
-                        if (playlist['subCategory'] != null) ...[
-                          SizedBox(height: 2),
-                          Text(
-                            'Katalog: ${playlist['subCategory']}',
-                            style: TextStyle(
-                              color: Colors.orange,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+
                       ],
                     ),
                   ),

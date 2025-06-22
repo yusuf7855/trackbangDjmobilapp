@@ -702,24 +702,49 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                           bottom: 0,
                           right: 0,
                           child: Container(
+                            width: 28, // Küçültülmüş boyut (önceden 36)
+                            height: 28, // Küçültülmüş boyut (önceden 36)
                             decoration: BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.black, width: 2),
-                            ),
-                            child: IconButton(
-                              icon: _isUpdatingImage
-                                  ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                                  strokeWidth: 2,
+                              border: Border.all(color: Colors.black, width: 1.5), // Border da küçültüldü
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 3,
+                                  offset: Offset(0, 1),
                                 ),
-                              )
-                                  : const Icon(Icons.camera_alt, size: 18),
-                              onPressed: _isUpdatingImage ? null : _pickImage,
-                              color: Colors.black,
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14), // Radius'u yarıya indirdik
+                                onTap: _isUpdatingImage ? null : _pickImage,
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: _isUpdatingImage
+                                        ? const SizedBox(
+                                      width: 14, // Loading icon boyutu küçültüldü
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                        strokeWidth: 1.5, // Stroke width küçültüldü
+                                      ),
+                                    )
+                                        : const Icon(
+                                      Icons.camera_alt,
+                                      size: 16, // Icon boyutu küçültüldü (önceden 18)
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),

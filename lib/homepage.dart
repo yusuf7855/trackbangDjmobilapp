@@ -32,6 +32,26 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with TickerProviderStateMixin {
+  Map<String, bool> _houseExpandedStates = {};
+  String selectedHouseGenre = 'Genre Filter';
+  String houseFilterOrder = 'Newest First';
+
+// Genre listesi
+  final List<Map<String, String>> houseGenres = [
+    {'display': 'Genre Filter', 'value': 'all'},
+    {'display': 'Afro House', 'value': 'afrohouse'},
+    {'display': 'Indie Dance', 'value': 'indiedance'},
+    {'display': 'Organic House', 'value': 'organichouse'},
+    {'display': 'Down Tempo', 'value': 'downtempo'},
+    {'display': 'Melodic House', 'value': 'melodichouse'},
+  ];
+
+
+  void _toggleHousePlaylistExpansion(String playlistId) {
+    setState(() {
+      _houseExpandedStates[playlistId] = !(_houseExpandedStates[playlistId] ?? false);
+    });
+  }
   late TabController _tabController;
   String? userId;
 
@@ -692,7 +712,7 @@ class _HomeScreenState extends State<HomeScreen>
                 children: [
                   Image.asset(
                     'assets/beatport_logo.png',
-                    width: 10,
+                    width: 8,
                     height: 10,
                   ),
                   const SizedBox(width: 3),
@@ -810,48 +830,374 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildHouseTab() {
-    if (isLoadingHouse) {
-      return _buildLoadingAnimation();
-    }
+    return Column(
+      children: [
+        // Filter Header - Same as World page
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            color: Color(0xFF0A0A0A),
+          ),
+          child: Row(
+            children: [
+              // Genre Filter Dropdown
+              Expanded(
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF111111),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Color(0xFF222222), width: 1),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedHouseGenre,
+                      isExpanded: true,
+                      dropdownColor: Color(0xFF111111),
+                      isDense: true,
+                      style: TextStyle(
+                        color: selectedHouseGenre == 'Genre Filter' ? Colors.grey[400] : Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      icon: Icon(
+                        Icons.expand_more,
+                        color: Colors.grey[400],
+                        size: 17,
+                      ),
+                      items: houseGenres.map((genre) {
+                        return DropdownMenuItem<String>(
+                          value: genre['display']!,
+                          child: Text(
+                            genre['display']!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: genre['display'] == 'Genre Filter'
+                                  ? Colors.grey[400]
+                                  : Colors.white,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            selectedHouseGenre = newValue;
+                            _loadHousePlaylists(); // Bu fonksiyonu güncelleyeceksiniz
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
 
-    if (housePlaylists.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.people_outline, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'No playlists from following users',
-              style: TextStyle(color: Colors.grey, fontSize: 16),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Follow users to see their playlists here',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-          ],
-        ),
-      );
-    }
+              SizedBox(width: 10),
 
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: SizedBox(height: 16),
+              // Sort Dropdown
+              Expanded(
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF111111),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Color(0xFF222222), width: 1),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: houseFilterOrder,
+                      isExpanded: true,
+                      dropdownColor: Color(0xFF111111),
+                      isDense: true,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      icon: Icon(
+                        Icons.expand_more,
+                        color: Colors.grey[400],
+                        size: 17,
+                      ),
+                      items: [
+                        DropdownMenuItem<String>(
+                          value: 'Newest First',
+                          child: Text(
+                            'Newest First',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        DropdownMenuItem<String>(
+                          value: 'Oldest First',
+                          child: Text(
+                            'Oldest First',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            houseFilterOrder = newValue;
+                            _loadHousePlaylists(); // Bu fonksiyonu güncelleyeceksiniz
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-                (context, index) {
-              final playlist = housePlaylists[index];
-              return _buildPlaylistCard(playlist);
-            },
-            childCount: housePlaylists.length,
+
+        // Content
+        Expanded(
+          child: isLoadingHouse
+              ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: RotationTransition(
+                    turns: _loadingAnimationController,
+                    child: Icon(
+                      Icons.refresh,
+                      size: 30,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Loading House Playlists...',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          )
+              : housePlaylists.isEmpty
+              ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Icon(
+                    Icons.playlist_remove,
+                    size: 30,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'No House Playlists',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  selectedHouseGenre != 'Genre Filter'
+                      ? 'No playlists in $selectedHouseGenre category'
+                      : 'No house playlists found',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          )
+              : RefreshIndicator(
+            onRefresh: _loadHousePlaylists,
+            backgroundColor: Color(0xFF1A1A1A),
+            color: Colors.white,
+            child: ListView.builder(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 32),
+              itemCount: housePlaylists.length,
+              itemBuilder: (context, index) {
+                final playlist = housePlaylists[index];
+                final playlistId = playlist['_id']?.toString() ?? '';
+                final isExpanded = _houseExpandedStates[playlistId] ?? false;
+                final musics = playlist['musics'] as List<dynamic>? ?? [];
+
+                return Container(
+                  margin: EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF151515),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Color(0xFF2A2A2A), width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Playlist Header - Clickable
+                      InkWell(
+                        onTap: () => _toggleHousePlaylistExpansion(playlistId),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              // Playlist Icon
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: Color(0xFF2A2A2A),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Color(0xFF333333), width: 1),
+                                ),
+                                child: Icon(
+                                  Icons.queue_music,
+                                  color: Colors.blue[400],
+                                  size: 24,
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      playlist['name'] ?? 'Untitled Playlist',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          playlist['owner']?['displayName'] ?? 'Unknown',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.grey[400],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Color(0xFF2A2A2A),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            '${musics.length} tracks',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey[500],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Color(0xFF2A2A2A),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  isExpanded
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
+                                  color: Colors.grey[400],
+                                  size: 20,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Expanded Music List
+                      if (isExpanded && musics.isNotEmpty)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Color(0xFF0F0F0F),
+                            borderRadius: BorderRadius.only(
+                              bottomLeft: Radius.circular(16),
+                              bottomRight: Radius.circular(16),
+                            ),
+                            border: Border(
+                              top: BorderSide(color: Color(0xFF2A2A2A), width: 1),
+                            ),
+                          ),
+                          child: Column(
+                            children: musics.map((music) {
+                              return Container(
+                                margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: CommonMusicPlayer(
+                                  track: music,
+                                  userId: userId,
+                                  preloadWebView: true,
+                                  lazyLoad: false,
+                                  onLikeChanged: () {
+                                    _loadHousePlaylists();
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],
     );
   }
+
+// Expansion state toggle fonksiyonu
 
   // Hot tab uses the separate HotPage
   Widget _buildHotTab() {
@@ -1009,10 +1355,10 @@ class _HomeScreenState extends State<HomeScreen>
 
             // Logo
             Container(
-              margin: EdgeInsets.only(left: 4),
+              margin: EdgeInsets.only(left: 0),
               child: Image.asset(
                 'assets/your_logo.png',
-                height: 40,
+                height: 30,
                 fit: BoxFit.contain,
               ),
             ),
