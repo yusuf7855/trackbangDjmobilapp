@@ -298,6 +298,7 @@ class ProfileWidgets {
     );
   }
 
+  // Sadece _buildLinkSection metodunu değiştir - diğer kodlara dokunma
   Widget _buildLinkSection() {
     if (profileState.isEditing) {
       return Padding(
@@ -312,35 +313,83 @@ class ProfileWidgets {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: InkWell(
-        onTap: () {
-          // URL'yi açma işlemi
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.link, color: Colors.black, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                profileState.userData!['profileLink']['name'],
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+    // Çoklu linkler için - profileLinks listesini kontrol et
+    final profileLinks = profileState.userData?['profileLinks'] as List<dynamic>? ?? [];
+
+    if (profileLinks.isEmpty) {
+      // Eski tek link sistemi
+      return Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: InkWell(
+          onTap: () {
+            // URL'yi açma işlemi
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[400]!, width: 0.3),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.link, color: Colors.black87, size: 11),
+                const SizedBox(width: 3),
+                Text(
+                  profileState.userData!['profileLink']['name'],
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      );
+    }
+
+    // Çoklu linkler - yan yana chip'ler
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        alignment: WrapAlignment.center,
+        children: profileLinks.map((link) => InkWell(
+          onTap: () {
+            // URL'yi açma işlemi
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey[400]!, width: 0.3),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.link, color: Colors.black87, size: 10),
+                const SizedBox(width: 2),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 60),
+                  child: Text(
+                    link['title'] ?? 'Link',
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )).toList(),
       ),
     );
   }

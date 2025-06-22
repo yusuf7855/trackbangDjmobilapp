@@ -809,41 +809,45 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
           // Linkler
           if (_profileLinks.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
               children: _profileLinks.map((link) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[900],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[700]!),
-                  ),
-                  child: InkWell(
-                    onTap: () => _launchURL(link['url']!),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.open_in_new, color: Colors.white70, size: 20),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              link['title']!,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
+                return InkWell(
+                  onTap: () => _launchURL(link['url']!),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey[300]!, width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.link, color: Colors.white70, size: 14),
+                        const SizedBox(width: 8),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 100),
+                          child: Text(
+                            link['title']!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.3,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 );
               }).toList(),
             ),
+          const SizedBox(height: 14),
 
           // Buton: Takip / Profili Düzenle
           Center(
@@ -912,38 +916,50 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   Widget _buildEditButton() {
     return Container(
       width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isEditing ? Colors.grey[700] : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: ElevatedButton(
-        onPressed: () {
-          setState(() {
-            isEditing = !isEditing;
-          });
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+        border: Border.all(
+          color: isEditing ? Colors.grey[600]! : Colors.grey[300]!,
+          width: 1,
         ),
-        child: Text(
-          isEditing ? "İptal" : "Profili Düzenle",
-          style: const TextStyle(
-            fontSize: 16,
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              isEditing = !isEditing;
+            });
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isEditing ? Icons.close : Icons.edit,
+                  color: isEditing ? Colors.white : Colors.black87,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isEditing ? "İptal" : " Profili Düzenle",
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isEditing ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-
-  // Fotoğraf galerisi
   Widget _buildPhotoGallery() {
     if (_currentAdditionalImages.isEmpty) {
       return const SizedBox();
@@ -951,25 +967,25 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      padding: const EdgeInsets.all(9),
+      padding: const EdgeInsets.only(bottom: 6, left: 9, right: 9), // top padding kaldırıldı
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.photo_library, color: Colors.white, size: 20),
-              SizedBox(width: 8),
+              Icon(Icons.photo_library, color: Colors.white, size: 18),
+              SizedBox(width: 6),
               Text(
                 "Fotoğraflar",
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 18,
+                  fontSize: 16,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             children: _currentAdditionalImages.asMap().entries.map((entry) {
               final index = entry.key;
@@ -978,9 +994,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 child: GestureDetector(
                   onTap: () => _showImageGallery(index),
                   child: Container(
-                    height: 90,
+                    height: 80,
                     margin: EdgeInsets.only(
-                      right: index < _currentAdditionalImages.length - 1 ? 8 : 0,
+                      right: index < _currentAdditionalImages.length - 1 ? 6 : 0,
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
@@ -1014,7 +1030,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       ),
     );
   }
-
   Widget _buildTabBar() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -1907,11 +1922,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   children: [
                     // Ana profil header
                     _buildProfileHeader(),
-                    const SizedBox(height: 16),
+
 
                     // Fotoğraf galerisi
                     _buildPhotoGallery(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // Düzenleme formu
                     if (isEditing) ...[
@@ -1921,7 +1936,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
                     // Tab bar
                     _buildTabBar(),
-                    const SizedBox(height: 16),
+
                   ],
                 ),
               ),
