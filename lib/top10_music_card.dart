@@ -16,16 +16,56 @@ class Top10MusicCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (topMusics.isEmpty) {
-      return SizedBox.shrink(); // Boş ise hiçbir şey gösterme
+      return SizedBox.shrink();
     }
 
     return Column(
-      children: topMusics.map((music) {
-        return CommonMusicPlayer(
-          key: ValueKey('top10_${music['_id']}'),
-          track: music,
-          userId: userId,
-          lazyLoad: false,
+      children: topMusics.asMap().entries.map((entry) {
+        final index = entry.key;
+        final music = entry.value;
+
+        return Container(
+          margin: EdgeInsets.only(bottom: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Sol taraftaki sıra numarası - minyon ve modern
+              Container(
+                width: 32,
+                height: 32,
+                margin: EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[800]?.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.grey[600]?.withOpacity(0.3) ?? Colors.grey,
+                    width: 0.5,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    '${index + 1}',
+                    style: TextStyle(
+                      color: Colors.grey[300],
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Şarkı player'ı - genişletilmiş alan
+              Expanded(
+                child: CommonMusicPlayer(
+                  key: ValueKey('top10_${music['_id']}_${index}'),
+                  track: music,
+                  userId: userId,
+                  lazyLoad: false,
+                ),
+              ),
+            ],
+          ),
         );
       }).toList(),
     );

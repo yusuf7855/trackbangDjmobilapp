@@ -1,3 +1,5 @@
+// lib/profile_playlist_card.dart - Complete Fixed Version
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -50,11 +52,9 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
     _initializePlaylistMusics();
   }
 
-// BURAYA EKLEYİN ↓
   @override
   void didUpdateWidget(ProfilePlaylistCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-
     // Playlist verileri değiştiyse local state'i güncelle
     if (oldWidget.playlist != widget.playlist) {
       _initializePlaylistMusics();
@@ -86,6 +86,57 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
     }
   }
 
+  // Public/Private toggle için yeni metod
+  Future<void> _togglePublicPrivate() async {
+    if (!widget.isCurrentUser || _isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      // Public/Private durumunu toggle et
+      final newIsPublic = !(widget.playlist['isPublic'] ?? false);
+
+      final response = await http.put(
+        Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists/user/${widget.playlist['_id']}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'isPublic': newIsPublic,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          widget.playlist['isPublic'] = newIsPublic;
+        });
+
+        _showSnackBar(
+          newIsPublic ? 'Playlist herkese açık yapıldı' : 'Playlist gizli yapıldı',
+          Colors.green,
+        );
+
+        // Parent'a güncellendiğini bildir
+        widget.onPlaylistUpdated?.call();
+      } else {
+        final errorData = json.decode(response.body);
+        _showSnackBar(errorData['message'] ?? 'Güncelleme başarısız', Colors.red);
+      }
+    } catch (e) {
+      _showSnackBar('Hata: $e', Colors.red);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _savePlaylistChanges() async {
     if (_userId == null) return;
 
@@ -114,9 +165,8 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
       if (response.statusCode == 200) {
         _showSnackBar('Playlist güncellendi', Colors.green);
 
-        // YENİ: Playlist verilerini güncelle
+        // Local playlist verilerini güncelle
         setState(() {
-          // Local playlist verilerini güncelle
           widget.playlist['musics'] = List.from(_playlistMusics);
           widget.playlist['musicCount'] = _playlistMusics.length;
         });
@@ -150,22 +200,14 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('İptal', style: TextStyle(color: Colors.grey[400])),
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('İptal', style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.of(context).pop();
               setState(() {
                 _playlistMusics.removeAt(index);
-                // YENİ: Hemen local state'i güncelle
-                widget.playlist['musicCount'] = _playlistMusics.length;
-              });
-              _showSnackBar('Şarkı kaldırıldı', Colors.orange);
-
-              // YENİ: Parent'a değişikliği bildir
-              Future.delayed(Duration(milliseconds: 300), () {
-                widget.onPlaylistUpdated?.call();
               });
             },
             child: Text('Kaldır', style: TextStyle(color: Colors.red)),
@@ -189,13 +231,13 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('İptal', style: TextStyle(color: Colors.grey[400])),
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('İptal', style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _performDeletePlaylist();
+            onPressed: () {
+              Navigator.of(context).pop();
+              _performDeletePlaylist();
             },
             child: Text('Sil', style: TextStyle(color: Colors.red)),
           ),
@@ -205,8 +247,6 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
   }
 
   Future<void> _performDeletePlaylist() async {
-    if (_userId == null) return;
-
     setState(() {
       _isLoading = true;
     });
@@ -218,20 +258,14 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
       final response = await http.delete(
         Uri.parse('${UrlConstants.apiBaseUrl}/api/playlists/user/${widget.playlist['_id']}'),
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
 
       if (response.statusCode == 200) {
         _showSnackBar('Playlist silindi', Colors.green);
-
-        // YENİ: Üst widget'a playlist silindiğini bildir ve hemen yenile
-        widget.onExpansionChanged(-1, false); // Refresh signal
-
-        // Biraz bekle ve sonra callback'i çağır
-        Future.delayed(Duration(milliseconds: 500), () {
-          widget.onPlaylistUpdated?.call();
-        });
+        widget.onPlaylistUpdated?.call();
       } else {
         final errorData = json.decode(response.body);
         _showSnackBar(errorData['message'] ?? 'Silme başarısız', Colors.red);
@@ -244,7 +278,6 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
       });
     }
   }
-
 
   void _showSnackBar(String message, Color backgroundColor) {
     if (!mounted) return;
@@ -276,135 +309,263 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
 
     final isExpanded = widget.currentlyExpandedIndex == widget.index;
 
-    return Card(
-      color: Colors.grey[900],
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[800]!, width: 0.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
-      child: ExpansionTile(
-        key: ValueKey('${widget.playlist['_id']}_${widget.index}'),
-        initiallyExpanded: isExpanded,
-        onExpansionChanged: (expanded) {
-          widget.onExpansionChanged(widget.index, expanded);
-        },
-        title: Row(
-          children: [
-            // Playlist icon
-            Container(
-              padding: EdgeInsets.all(6),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+          expansionTileTheme: ExpansionTileThemeData(
+            tilePadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            childrenPadding: EdgeInsets.zero,
+            backgroundColor: Colors.transparent,
+            collapsedBackgroundColor: Colors.transparent,
+            iconColor: Colors.white70,
+            collapsedIconColor: Colors.white70,
+          ),
+        ),
+        child: ExpansionTile(
+          key: ValueKey('${widget.playlist['_id']}_${widget.index}'),
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: (expanded) {
+            widget.onExpansionChanged(widget.index, expanded);
+            if (expanded) {
+              // Açıldığında şarkıları yeniden yükle
+              setState(() {
+                _initializePlaylistMusics();
+              });
+            }
+          },
+          // Modern ok ikonu ve animasyon
+          trailing: AnimatedRotation(
+            turns: isExpanded ? 0.5 : 0.0,
+            duration: Duration(milliseconds: 200),
+            child: Container(
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: widget.playlist['isPublic'] == true
-                    ? Colors.green.withOpacity(0.2)
-                    : Colors.orange.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(6),
+                color: isExpanded
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.grey.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: widget.playlist['isPublic'] == true
-                      ? Colors.green
-                      : Colors.orange,
-                  width: 1,
+                  color: Colors.grey[600]!.withOpacity(0.3),
+                  width: 0.5,
                 ),
               ),
               child: Icon(
-                widget.playlist['isPublic'] == true
-                    ? Icons.public
-                    : Icons.lock,
-                color: widget.playlist['isPublic'] == true
-                    ? Colors.green
-                    : Colors.orange,
-                size: 16,
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.playlist['name'] ?? 'Untitled Playlist',
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    "${_playlistMusics.length} songs • ${widget.playlist['genre'] ?? 'Unknown'}",
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            // Edit mode indicator
-            if (_isEditMode)
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.orange, width: 1),
-                ),
-                child: Text(
-                  'EDIT',
-                  style: TextStyle(
-                    color: Colors.orange,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        trailing: widget.isCurrentUser ? Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Loading indicator
-            if (_isLoading)
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-            if (_isLoading) SizedBox(width: 8),
-            // Edit button
-            IconButton(
-              icon: Icon(
-                _isEditMode ? Icons.save : Icons.edit,
-                color: _isEditMode ? Colors.green : Colors.white70,
+                Icons.keyboard_arrow_down,
+                color: isExpanded ? Colors.white : Colors.grey[400],
                 size: 18,
               ),
-              onPressed: _isLoading ? null : _toggleEditMode,
-              tooltip: _isEditMode ? 'Kaydet' : 'Düzenle',
-              padding: EdgeInsets.all(4),
-              constraints: BoxConstraints(minWidth: 32, minHeight: 32),
             ),
-            // Delete button (only in edit mode)
-            if (_isEditMode)
-              IconButton(
-                icon: Icon(Icons.delete, color: Colors.red, size: 18),
-                onPressed: _isLoading ? null : _deletePlaylist,
-                tooltip: 'Playlist\'i Sil',
-                padding: EdgeInsets.all(4),
-                constraints: BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-            // Expansion arrow
-            Icon(
-              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-              color: Colors.white70,
+          ),
+          title: SizedBox(
+            height: 48, // Sabit yükseklik
+            child: Row(
+              children: [
+                // Public/Private Switch Button
+                if (widget.isCurrentUser)
+                  GestureDetector(
+                    onTap: _isLoading ? null : _togglePublicPrivate,
+                    child: Container(
+                      width: 28,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: widget.playlist['isPublic'] == true
+                            ? Colors.green
+                            : Colors.grey[600],
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: widget.playlist['isPublic'] == true
+                              ? Colors.green[300]!
+                              : Colors.grey[500]!,
+                          width: 0.5,
+                        ),
+                      ),
+                      child: AnimatedAlign(
+                        duration: Duration(milliseconds: 200),
+                        alignment: widget.playlist['isPublic'] == true
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          margin: EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 1,
+                                offset: Offset(0, 0.5),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            widget.playlist['isPublic'] == true
+                                ? Icons.public
+                                : Icons.lock,
+                            size: 8,
+                            color: widget.playlist['isPublic'] == true
+                                ? Colors.green
+                                : Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                // Read-only indicator for other users
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: widget.playlist['isPublic'] == true
+                          ? Colors.green.withOpacity(0.2)
+                          : Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: widget.playlist['isPublic'] == true
+                            ? Colors.green
+                            : Colors.orange,
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Icon(
+                      widget.playlist['isPublic'] == true
+                          ? Icons.public
+                          : Icons.lock,
+                      color: widget.playlist['isPublic'] == true
+                          ? Colors.green
+                          : Colors.orange,
+                      size: 10,
+                    ),
+                  ),
+
+                SizedBox(width: 8),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        widget.playlist['name'] ?? 'Untitled Playlist',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: 1),
+                      Text(
+                        "${_playlistMusics.length} songs • ${widget.playlist['genre'] ?? 'Unknown'}",
+                        style: const TextStyle(color: Colors.grey, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Edit mode indicator - kompakt
+                if (_isEditMode)
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(color: Colors.orange, width: 0.5),
+                    ),
+                    child: Text(
+                      'EDIT',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontSize: 7,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+
+                // Trailing actions area
+                SizedBox(width: 8),
+                SizedBox(
+                  width: _isEditMode ? 80 : 40, // Sabit genişlik
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      // Loading indicator
+                      if (_isLoading)
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      else if (widget.isCurrentUser) ...[
+                        // Edit button
+                        GestureDetector(
+                          onTap: _isLoading ? null : _toggleEditMode,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: _isEditMode ? Colors.green.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              _isEditMode ? Icons.save : Icons.edit,
+                              color: _isEditMode ? Colors.green : Colors.white70,
+                              size: 14,
+                            ),
+                          ),
+                        ),
+
+                        // Delete button (only in edit mode)
+                        if (_isEditMode) ...[
+                          SizedBox(width: 4),
+                          GestureDetector(
+                            onTap: _isLoading ? null : _deletePlaylist,
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(
+                                Icons.delete,
+                                color: Colors.red,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ) : Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-              color: Colors.white70,
-            ),
-          ],
+          ),
+          children: isExpanded ? _buildPlaylistChildren() : [],
         ),
-        children: isExpanded ? _buildPlaylistChildren() : [],
       ),
     );
   }
@@ -413,14 +574,14 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
     if (_playlistMusics.isEmpty) {
       return [
         Container(
-          padding: EdgeInsets.all(20),
+          padding: EdgeInsets.all(12),
           child: Column(
             children: [
-              Icon(Icons.music_off, color: Colors.grey[600], size: 32),
-              SizedBox(height: 8),
+              Icon(Icons.music_off, color: Colors.grey[600], size: 24),
+              SizedBox(height: 4),
               Text(
                 "Bu playlist'te şarkı yok",
-                style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                style: TextStyle(color: Colors.grey[400], fontSize: 11),
               ),
             ],
           ),
@@ -433,47 +594,59 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
       final music = entry.value;
 
       return Container(
-        margin: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        margin: EdgeInsets.only(bottom: 2), // Çok minimal spacing
         child: Stack(
           children: [
-            // Ana müzik player
-            CommonMusicPlayer(
-              key: ValueKey('profile_${widget.playlist['_id']}_${music['_id']}_$index'),
-              track: music,
-              userId: _userId,
-              preloadWebView: false,
-              lazyLoad: true,
-              onLikeChanged: () {
-                // Beğeni değiştiğinde herhangi bir işlem yapmaya gerek yok
-                // Çünkü bu sadece müzik beğenisi, playlist içeriği değişmiyor
-              },
+            // CommonMusicPlayer - sıkıştırılmış container
+            Container(
+              height: 120, // Sadece Spotify frame + minimal button area
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: OverflowBox(
+                  maxHeight: 156,
+                  alignment: Alignment.topCenter, // Üstten hizala
+                  child: Transform.translate(
+                    offset: Offset(0, 0), // Offset yok
+                    child: CommonMusicPlayer(
+                      key: ValueKey('profile_${widget.playlist['_id']}_${music['_id']}_$index'),
+                      track: music,
+                      userId: _userId,
+                      preloadWebView: false,
+                      lazyLoad: false,
+                      onLikeChanged: () {
+                        // Beğeni değiştiğinde herhangi bir işlem yapmaya gerek yok
+                      },
+                    ),
+                  ),
+                ),
+              ),
             ),
 
-            // Edit mode overlay - sadece remove butonu
+            // Edit mode overlay - remove butonu
             if (_isEditMode && widget.isCurrentUser)
               Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.9),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: IconButton(
-                    icon: Icon(Icons.remove, color: Colors.white, size: 16),
-                    onPressed: () => _removeTrackFromPlaylist(index),
-                    tooltip: 'Şarkıyı Kaldır',
-                    padding: EdgeInsets.all(4),
-                    constraints: BoxConstraints(
-                      minWidth: 24,
-                      minHeight: 24,
+                top: 4,
+                right: 4,
+                child: GestureDetector(
+                  onTap: () => _removeTrackFromPlaylist(index),
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.95),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.5),
+                          blurRadius: 2,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 12,
                     ),
                   ),
                 ),

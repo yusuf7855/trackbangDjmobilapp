@@ -467,6 +467,12 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // homepage.dart dosyasındaki _buildCategorySection metodunu tamamen değiştirin
+
+// homepage.dart dosyasındaki _buildCategorySection metodunu tamamen değiştirin
+
+// homepage.dart dosyasındaki _buildCategorySection metodunu tamamen değiştirin
+
   Widget _buildCategorySection(String title, List<dynamic> tracks) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -484,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen>
                 fontSize: 22,
                 fontWeight: FontWeight.w300, // Light weight
                 fontStyle: FontStyle.italic, // İtalik
-                letterSpacing: 0, // Daha geniş harf aralığı
+                letterSpacing: 0,
                 shadows: [
                   Shadow(
                     offset: Offset(1.0, 1.0),
@@ -496,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
 
-          // Şarkılar - Cache'den benzersiz key ile al
+          // Şarkılar - Modern sıra numaralı tasarım
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 8),
             child: Column(
@@ -505,56 +511,77 @@ class _HomeScreenState extends State<HomeScreen>
                 final music = entry.value;
                 final spotifyId = music['spotifyId']?.toString();
                 final trackId = music['_id']?.toString() ?? '';
-
-                // Benzersiz cache key oluştur
                 final categoryKey = _getCategoryKey(title);
-                final uniqueKey = '${categoryKey}_${trackId}_${spotifyId}';
 
-                // Cache'de varsa direkt WebView göster
-                if (spotifyId != null && _preloadedControllers.containsKey(uniqueKey)) {
+                if (spotifyId == null || spotifyId.isEmpty) {
+                  return SizedBox.shrink(); // Spotify ID yoksa gösterme
+                }
+
+                final uniqueKey = '${categoryKey}_${trackId}_$spotifyId';
+
+                // Cache'de varsa kullan (optimize edilmiş versiyon)
+                if (_preloadedControllers.containsKey(uniqueKey)) {
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[900]?.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey[700]!, width: 0.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
+                    margin: EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Cache'den alınan WebView
+                        // Sol taraftaki sıra numarası - çok minyon
                         Container(
-                          height: 80,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(10),
-                              topRight: Radius.circular(10),
+                          width: 24,
+                          height: 24,
+                          margin: EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[800]?.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 10,
+                                fontWeight: FontWeight.w300,
+                              ),
                             ),
-                            child: WebViewWidget(controller: _preloadedControllers[uniqueKey]!),
                           ),
                         ),
-                        // Action buttons bölümü - Tüm butonlar dahil
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[850],
-                            borderRadius: BorderRadius.only(
-                              bottomLeft: Radius.circular(10),
-                              bottomRight: Radius.circular(10),
+
+                        // Şarkı player'ı - ultra kompakt
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[900]?.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey[700]!, width: 0.2),
                             ),
-                            border: Border(
-                              top: BorderSide(color: Colors.grey[700]!, width: 0.5),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Spotify Embed Section - tam fit
+                                  Container(
+                                    height: 80,
+                                    child: WebViewWidget(
+                                      controller: _preloadedControllers[uniqueKey]!,
+                                    ),
+                                  ),
+
+                                  // Action buttons - yapışık
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[850]?.withOpacity(0.6),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: _buildCachedActionButtons(music),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: _buildCachedActionButtons(music),
                           ),
                         ),
                       ],
@@ -562,16 +589,48 @@ class _HomeScreenState extends State<HomeScreen>
                   );
                 }
 
-                // Cache'de yoksa normal CommonMusicPlayer (fallback)
-                return CommonMusicPlayer(
-                  key: ValueKey('top10_${music['_id']}_${title}_$index'),
-                  track: music,
-                  userId: userId,
-                  preloadWebView: true,
-                  lazyLoad: false,
-                  onLikeChanged: () {
-                    _loadTop10Data();
-                  },
+                // Cache'de yoksa normal CommonMusicPlayer (fallback) - sıra numarası ile
+                return Container(
+                  margin: EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Sol taraftaki sıra numarası - çok minyon
+                      Container(
+                        width: 24,
+                        height: 24,
+                        margin: EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800]?.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 10,
+                              fontWeight: FontWeight.w300,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Şarkı player'ı - ultra kompakt
+                      Expanded(
+                        child: CommonMusicPlayer(
+                          key: ValueKey('top10_${music['_id']}_${title}_$index'),
+                          track: music,
+                          userId: userId,
+                          preloadWebView: true,
+                          lazyLoad: false,
+                          onLikeChanged: () {
+                            _loadTop10Data();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               }).toList(),
             ),
@@ -581,7 +640,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // Kategori title'ından key oluşturmak için helper metod
   String _getCategoryKey(String title) {
     switch (title) {
       case 'Trackbang Top 10':
