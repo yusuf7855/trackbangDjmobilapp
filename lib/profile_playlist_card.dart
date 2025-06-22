@@ -599,11 +599,11 @@ class _ProfilePlaylistCardState extends State<ProfilePlaylistCard>
           children: [
             // CommonMusicPlayer - sıkıştırılmış container
             Container(
-              height: 120, // Sadece Spotify frame + minimal button area
+              height: 114, // Sadece Spotify frame + minimal button area
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: OverflowBox(
-                  maxHeight: 156,
+                  maxHeight: 114,
                   alignment: Alignment.topCenter, // Üstten hizala
                   child: Transform.translate(
                     offset: Offset(0, 0), // Offset yok
