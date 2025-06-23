@@ -1,4 +1,4 @@
-// lib/menu/sample_bank_screen.dart - Tam Fonksiyonel Versiyon
+// lib/menu/sample_bank_screen.dart - Düzeltilmiş ve Modern Tasarım
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -44,16 +44,18 @@ class _SampleBankScreenState extends State<SampleBankScreen>
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
-  // Modern dark colors
-  static const Color _primaryColor = Color(0xFF6B7280);
-  static const Color _secondaryColor = Color(0xFF9CA3AF);
-  static const Color _backgroundDark = Color(0xFF000000);
-  static const Color _surfaceDark = Color(0xFF111827);
-  static const Color _cardDark = Color(0xFF1F2937);
-  static const Color _textPrimary = Color(0xFFFFFFFF);
-  static const Color _textSecondary = Color(0xFF9CA3AF);
-  static const Color _accentGreen = Color(0xFF10B981);
-  static const Color _accentOrange = Color(0xFFF59E0B);
+  // WIDGET LIFECYCLE İÇİN GÜVENLİ SCAFFOLD MESSENGER
+  ScaffoldMessengerState? _scaffoldMessenger;
+
+  // Modern monochrome colors
+  static const Color _backgroundColor = Color(0xFF000000);
+  static const Color _surfaceColor = Color(0xFF1A1A1A);
+  static const Color _cardColor = Color(0xFF2A2A2A);
+  static const Color _primaryText = Color(0xFFFFFFFF);
+  static const Color _secondaryText = Color(0xFF9E9E9E);
+  static const Color _tertiaryText = Color(0xFF757575);
+  static const Color _accentColor = Color(0xFF424242);
+  static const Color _borderColor = Color(0xFF3A3A3A);
 
   @override
   void initState() {
@@ -74,16 +76,43 @@ class _SampleBankScreenState extends State<SampleBankScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Widget lifecycle için güvenli ScaffoldMessenger referansı
+    _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+  }
+
+  @override
   void dispose() {
+    // Animation controller'ları önce durdur ve temizle
+    try {
+      _animationController.stop();
+      _animationController.reset();
+      _progressAnimationController.stop();
+      _progressAnimationController.reset();
+    } catch (e) {
+      print('Animation controller dispose error: $e');
+    }
+
+    // Stream'leri temizle
     _scrollController.dispose();
     _audioPlayer.dispose();
-    _dio.close();
+    _searchController.dispose();
+
+    // Animation controller'ları dispose et
     _animationController.dispose();
     _progressAnimationController.dispose();
-    _searchController.dispose();
+
+    // Dio'yu kapat
+    _dio.close();
+
+    // ScaffoldMessenger referansını temizle
+    _scaffoldMessenger = null;
+
     super.dispose();
   }
 
+  // SETUP AUDIO PLAYER - Güvenli stream handling
   void _setupAudioPlayer() {
     _audioPlayer.durationStream.listen((Duration? duration) {
       if (mounted && duration != null) {
@@ -105,11 +134,12 @@ class _SampleBankScreenState extends State<SampleBankScreen>
       if (mounted) {
         setState(() {
           _isPlaying = state.playing;
-          if (!state.playing) {
-            _position = Duration.zero;
-          }
+          // DÜZELTME: Oynatma durdurulduğunda pozisyonu sıfırlamıyoruz
+          // Bu, oynatma çubuğunun görünür kalmasını sağlar
         });
       }
+    }).onError((error) {
+      print('Audio player stream error: $error');
     });
   }
 
@@ -119,177 +149,39 @@ class _SampleBankScreenState extends State<SampleBankScreen>
     }
   }
 
-  // URL BUILDER - Resim için optimize edilmiş
-  String _buildImageUrl(String imageUrl) {
-    if (imageUrl.isEmpty) return '';
-
-    String baseUrl = UrlConstants.apiBaseUrl;
-    String finalUrl = '';
-
-    // Eğer URL zaten tam ise olduğu gibi kullan
-    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      finalUrl = imageUrl;
-
-      // HTTPS'yi HTTP'ye çevir
-      if (finalUrl.startsWith('https://')) {
-        finalUrl = finalUrl.replaceFirst('https://', 'http://');
-      }
-
-      // localhost ve 127.0.0.1'i IP'ye çevir
-      if (finalUrl.contains('localhost') || finalUrl.contains('127.0.0.1')) {
-        finalUrl = finalUrl.replaceAll('localhost', '192.168.1.106');
-        finalUrl = finalUrl.replaceAll('127.0.0.1', '192.168.1.106');
-      }
-
-      // Emulator IP'sini çevir
-      if (finalUrl.contains('10.0.2.2')) {
-        finalUrl = finalUrl.replaceAll('10.0.2.2', '192.168.1.106');
-      }
-    }
-    // Eğer /uploads/ ile başlıyorsa base URL ekle
-    else if (imageUrl.startsWith('/uploads/')) {
-      finalUrl = '$baseUrl$imageUrl';
-    }
-    // Eğer sadece dosya adı ise /uploads/sample-images/ ekle
-    else {
-      finalUrl = '$baseUrl/uploads/sample-images/$imageUrl';
-    }
-
-    return finalUrl;
-  }
-
-  // DEMO URL BUILDER - Audio için optimize edilmiş
-  String _buildDemoUrl(String demoUrl) {
-    if (demoUrl.isEmpty) return '';
-
-    String baseUrl = UrlConstants.apiBaseUrl;
-    String finalUrl = '';
-
-    // Eğer URL zaten tam ise olduğu gibi kullan
-    if (demoUrl.startsWith('http://') || demoUrl.startsWith('https://')) {
-      finalUrl = demoUrl;
-
-      // HTTPS'yi HTTP'ye çevir
-      if (finalUrl.startsWith('https://')) {
-        finalUrl = finalUrl.replaceFirst('https://', 'http://');
-      }
-
-      // localhost ve 127.0.0.1'i IP'ye çevir
-      if (finalUrl.contains('localhost') || finalUrl.contains('127.0.0.1')) {
-        finalUrl = finalUrl.replaceAll('localhost', '192.168.1.106');
-        finalUrl = finalUrl.replaceAll('127.0.0.1', '192.168.1.106');
-      }
-
-      // Emulator IP'sini çevir
-      if (finalUrl.contains('10.0.2.2')) {
-        finalUrl = finalUrl.replaceAll('10.0.2.2', '192.168.1.106');
-      }
-    }
-    // Eğer /uploads/ ile başlıyorsa base URL ekle
-    else if (demoUrl.startsWith('/uploads/')) {
-      finalUrl = '$baseUrl$demoUrl';
-    }
-    // Eğer sadece dosya adı ise /uploads/sample-demos/ ekle
-    else {
-      finalUrl = '$baseUrl/uploads/sample-demos/$demoUrl';
-    }
-
-    return finalUrl;
-  }
-
-  // RESIM WIDGET - Error handling ile
-  Widget _buildSampleImage(String imageUrl) {
-    final String finalImageUrl = _buildImageUrl(imageUrl);
-
-    if (finalImageUrl.isEmpty) {
-      return _buildPlaceholderImage('Resim bulunamadı');
-    }
-
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _textSecondary.withOpacity(0.3)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          finalImageUrl,
-          fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-
-            final progress = loadingProgress.expectedTotalBytes != null
-                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                : null;
-
-            return Container(
-              color: _cardDark,
-              child: Center(
-                child: CircularProgressIndicator(
-                  color: _accentGreen,
-                  value: progress,
-                  strokeWidth: 2,
-                ),
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return _buildPlaceholderImage('Yükleme hatası');
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderImage(String message) {
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        color: _cardDark,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _textSecondary.withOpacity(0.3)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.music_note,
-            color: _textSecondary,
-            size: 24,
-          ),
-          SizedBox(height: 4),
-          Text(
-            message,
-            style: TextStyle(
-              color: _textSecondary,
-              fontSize: 8,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // SAMPLE FETCHİNG
+  // SAMPLES FETCH - DÜZELTME
   Future<void> _fetchSamples() async {
     if (_isRefreshing) return;
 
     setState(() {
       _isRefreshing = true;
-      if (_samples.isEmpty) _isLoading = true;
+      if (_samples.isEmpty) {
+        _isLoading = true;
+      }
     });
 
     try {
       final response = await _dio.get('${UrlConstants.apiBaseUrl}/api/samples');
 
+      print('API Response Status: ${response.statusCode}');
+      print('API Response Data: ${response.data}');
+
       if (response.statusCode == 200) {
-        final List<dynamic> fetchedSamples = response.data ?? [];
+        // API'den dönen veri yapısını kontrol et
+        List<dynamic> fetchedSamples = [];
+
+        if (response.data is Map<String, dynamic>) {
+          // Eğer response.data bir map ise, samples array'ini al
+          fetchedSamples = response.data['samples'] ?? response.data['data'] ?? [];
+        } else if (response.data is List) {
+          // Eğer response.data doğrudan bir liste ise
+          fetchedSamples = response.data;
+        } else {
+          print('Unexpected response format: ${response.data.runtimeType}');
+          fetchedSamples = [];
+        }
+
+        print('Fetched samples count: ${fetchedSamples.length}');
 
         Set<String> genreSet = {'Tümü'};
         for (var sample in fetchedSamples) {
@@ -306,6 +198,9 @@ class _SampleBankScreenState extends State<SampleBankScreen>
             _isLoading = false;
             _isRefreshing = false;
           });
+
+          print('Samples loaded: ${_samples.length}');
+          print('Genres: $_genres');
         }
       }
     } catch (e) {
@@ -325,26 +220,72 @@ class _SampleBankScreenState extends State<SampleBankScreen>
   }
 
   void _showErrorSnackBar(String message) {
+    // Güvenli ScaffoldMessenger kullanımı
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red[600],
-          duration: Duration(seconds: 3),
-        ),
-      );
+      try {
+        if (_scaffoldMessenger != null) {
+          _scaffoldMessenger!.showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.grey[800],
+              duration: Duration(seconds: 3),
+            ),
+          );
+        } else {
+          // Fallback: context üzerinden dene
+          final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+          if (scaffoldMessenger != null) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: Colors.grey[800],
+                duration: Duration(seconds: 3),
+              ),
+            );
+          } else {
+            print('Error message (no ScaffoldMessenger): $message');
+          }
+        }
+      } catch (e) {
+        print('SnackBar error: $e - Message: $message');
+      }
+    } else {
+      print('Error message (not mounted): $message');
     }
   }
 
   void _showSuccessSnackBar(String message) {
+    // Güvenli ScaffoldMessenger kullanımı
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: _accentGreen,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      try {
+        if (_scaffoldMessenger != null) {
+          _scaffoldMessenger!.showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: _accentColor,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          // Fallback: context üzerinden dene
+          final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+          if (scaffoldMessenger != null) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: _accentColor,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else {
+            print('Success message (no ScaffoldMessenger): $message');
+          }
+        }
+      } catch (e) {
+        print('SnackBar error: $e - Message: $message');
+      }
+    } else {
+      print('Success message (not mounted): $message');
     }
   }
 
@@ -369,7 +310,7 @@ class _SampleBankScreenState extends State<SampleBankScreen>
     }).toList();
   }
 
-  // DEMO OYNATMA
+  // DEMO OYNATMA - DÜZELTME
   Future<void> _playDemo(String? demoUrl, String sampleId) async {
     if (demoUrl == null || demoUrl.isEmpty) {
       _showErrorSnackBar('Demo dosyası bulunamadı');
@@ -388,13 +329,16 @@ class _SampleBankScreenState extends State<SampleBankScreen>
         print('Playing demo URL: $validUrl');
 
         await _audioPlayer.setUrl(validUrl);
-        await _audioPlayer.play();
 
+        // DÜZELTME: setState'i play() çağrısından önce yapıyoruz
         if (mounted) {
           setState(() {
             _currentPlayingId = sampleId;
+            _position = Duration.zero; // Pozisyonu başlangıça çekiyoruz
           });
         }
+
+        await _audioPlayer.play();
       }
     } catch (e) {
       print('Audio play error: $e');
@@ -404,9 +348,15 @@ class _SampleBankScreenState extends State<SampleBankScreen>
     }
   }
 
-  // İNDİRME FONKSİYONU
+  // İNDİRME FONKSİYONU - DÜZELTME
   Future<void> _downloadMainContent(String sampleId, String title) async {
     if (_isDownloading) return;
+
+    // Boş değer kontrolü
+    if (sampleId.isEmpty) {
+      _showErrorSnackBar('Sample ID bulunamadı');
+      return;
+    }
 
     setState(() {
       _isDownloading = true;
@@ -437,17 +387,39 @@ class _SampleBankScreenState extends State<SampleBankScreen>
       String tokenApiUrl = '${UrlConstants.apiBaseUrl}/api/samples/download/generate';
 
       print('Token API URL: $tokenApiUrl');
+      print('Sample ID: $sampleId');
 
       final tokenResponse = await _dio.post(
         tokenApiUrl,
         data: {'sampleId': sampleId},
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        ),
       );
 
-      if (tokenResponse.statusCode != 200) {
+      print('Token Response: ${tokenResponse.statusCode}');
+      print('Token Data: ${tokenResponse.data}');
+
+      if (tokenResponse.statusCode != 200 || tokenResponse.data == null) {
         throw Exception('Token oluşturulamadı: ${tokenResponse.statusMessage}');
       }
 
-      final String token = tokenResponse.data['token'];
+      // Token'ı farklı field'lardan dene
+      String? token;
+      if (tokenResponse.data is Map<String, dynamic>) {
+        token = tokenResponse.data['token'] ??
+            tokenResponse.data['downloadToken'] ??
+            tokenResponse.data['access_token'];
+      } else if (tokenResponse.data is String) {
+        token = tokenResponse.data;
+      }
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Download token alınamadı');
+      }
+
       print('Download token: $token');
 
       // İndirme URL'si
@@ -456,284 +428,246 @@ class _SampleBankScreenState extends State<SampleBankScreen>
 
       // Dosya yolunu belirle
       Directory? directory;
+      String fileName = '${title.replaceAll(RegExp(r'[^\w\s-.]'), '_')}.wav';
+
       if (Platform.isAndroid) {
         directory = await getExternalStorageDirectory();
+        if (directory != null) {
+          String musicPath = '${directory.path}/Music';
+          await Directory(musicPath).create(recursive: true);
+          directory = Directory(musicPath);
+        }
       } else {
         directory = await getApplicationDocumentsDirectory();
       }
 
       if (directory == null) {
-        throw Exception('İndirme klasörü bulunamadı');
+        throw Exception('Dosya dizini oluşturulamadı');
       }
 
-      String fileName = '${title.replaceAll(RegExp(r'[^\w\s-]'), '')}.zip';
-      String savePath = '${directory.path}/$fileName';
-
-      print('Saving to: $savePath');
+      String filePath = '${directory.path}/$fileName';
+      print('File path: $filePath');
 
       // Dosyayı indir
       await _dio.download(
         downloadUrl,
-        savePath,
+        filePath,
         onReceiveProgress: (received, total) {
           if (total != -1 && mounted) {
-            final progress = received / total;
             setState(() {
-              _downloadProgress = progress;
+              _downloadProgress = received / total;
             });
-            print('Download progress: ${(progress * 100).toStringAsFixed(1)}%');
+            print('Download progress: ${(_downloadProgress * 100).toStringAsFixed(1)}%');
           }
         },
+        options: Options(
+          headers: {
+            'Accept': '*/*',
+          },
+        ),
       );
 
-      if (mounted) {
-        setState(() {
-          _isDownloading = false;
-          _downloadingItemId = '';
-          _downloadProgress = 0.0;
-        });
-        _progressAnimationController.reset();
+      _showSuccessSnackBar('İndirme tamamlandı: $fileName');
 
-        _showSuccessSnackBar('İndirme tamamlandı: $fileName');
-
-        // Dosyayı aç
-        if (Platform.isAndroid) {
-          try {
-            await OpenFile.open(savePath);
-          } catch (e) {
-            print('File open error: $e');
-            // Hata gösterme opsiyonel
-          }
-        }
+      // Dosyayı aç
+      try {
+        await OpenFile.open(filePath);
+      } catch (e) {
+        print('File open error: $e');
+        // Dosya açma hatası kritik değil
       }
 
     } catch (e) {
       print('Download error: $e');
+      String errorMessage = 'İndirme hatası';
+
+      if (e is DioException) {
+        if (e.response?.statusCode == 404) {
+          errorMessage = 'Sample bulunamadı';
+        } else if (e.response?.statusCode == 401) {
+          errorMessage = 'Yetki hatası';
+        } else if (e.response?.statusCode == 500) {
+          errorMessage = 'Sunucu hatası';
+        } else {
+          errorMessage = 'İndirme hatası: ${e.message}';
+        }
+      } else {
+        errorMessage = 'İndirme hatası: ${e.toString()}';
+      }
+
+      _showErrorSnackBar(errorMessage);
+    } finally {
       if (mounted) {
         setState(() {
           _isDownloading = false;
           _downloadingItemId = '';
           _downloadProgress = 0.0;
         });
-        _progressAnimationController.reset();
-        _showErrorSnackBar('İndirme hatası: ${e.toString()}');
       }
+      _progressAnimationController.reverse();
     }
   }
 
-  // SAMPLE CARD WIDGET
-  Widget _buildSampleCard(Map<String, dynamic> sample) {
-    final String sampleId = sample['_id']?.toString() ?? sample['id']?.toString() ?? '';
-    final String title = sample['title']?.toString() ?? sample['name']?.toString() ?? 'İsimsiz';
-    final String genre = sample['genre']?.toString() ?? 'Kategorisiz';
-    final double price = (sample['price'] ?? 0).toDouble();
-    final String imageUrl = sample['imageUrl']?.toString() ?? '';
-    final String? demoUrl = sample['demoUrl']?.toString();
-    final bool isCurrentPlaying = _currentPlayingId == sampleId;
-    final bool isDownloadable = sample['paymentStatus']?.toString() == 'free' ||
-        sample['paymentStatus']?.toString() == 'paid' || price == 0;
-    final bool isDownloadingThis = _downloadingItemId == sampleId && _isDownloading;
+  // URL BUILDER - Resim için optimize edilmiş
+  String _buildImageUrl(String imageUrl) {
+    if (imageUrl.isEmpty) return '';
 
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 300),
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isCurrentPlaying
-              ? [_cardDark, _surfaceDark]
-              : [Color(0xFF1A1A1A), _cardDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    String baseUrl = UrlConstants.apiBaseUrl;
+    String finalUrl = '';
+
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      finalUrl = imageUrl;
+      if (finalUrl.startsWith('https://')) {
+        finalUrl = finalUrl.replaceFirst('https://', 'http://');
+      }
+      if (finalUrl.contains('localhost') || finalUrl.contains('127.0.0.1')) {
+        finalUrl = finalUrl.replaceAll('localhost', '192.168.1.106');
+        finalUrl = finalUrl.replaceAll('127.0.0.1', '192.168.1.106');
+      }
+      if (finalUrl.contains('10.0.2.2')) {
+        finalUrl = finalUrl.replaceAll('10.0.2.2', '192.168.1.106');
+      }
+    } else if (imageUrl.startsWith('/uploads/')) {
+      finalUrl = '$baseUrl$imageUrl';
+    } else {
+      finalUrl = '$baseUrl/uploads/sample-images/$imageUrl';
+    }
+
+    return finalUrl;
+  }
+
+  // DEMO URL BUILDER - Audio için optimize edilmiş
+  String _buildDemoUrl(String demoUrl) {
+    if (demoUrl.isEmpty) return '';
+
+    String baseUrl = UrlConstants.apiBaseUrl;
+    String finalUrl = '';
+
+    if (demoUrl.startsWith('http://') || demoUrl.startsWith('https://')) {
+      finalUrl = demoUrl;
+      if (finalUrl.startsWith('https://')) {
+        finalUrl = finalUrl.replaceFirst('https://', 'http://');
+      }
+      if (finalUrl.contains('localhost') || finalUrl.contains('127.0.0.1')) {
+        finalUrl = finalUrl.replaceAll('localhost', '192.168.1.106');
+        finalUrl = finalUrl.replaceAll('127.0.0.1', '192.168.1.106');
+      }
+      if (finalUrl.contains('10.0.2.2')) {
+        finalUrl = finalUrl.replaceAll('10.0.2.2', '192.168.1.106');
+      }
+    } else if (demoUrl.startsWith('/uploads/')) {
+      finalUrl = '$baseUrl$demoUrl';
+    } else {
+      finalUrl = '$baseUrl/uploads/sample-demos/$demoUrl';
+    }
+
+    return finalUrl;
+  }
+
+  // RESIM WIDGET - Büyük resim ve tam ekran özelliği ile
+  Widget _buildSampleImage(String imageUrl) {
+    final String finalImageUrl = _buildImageUrl(imageUrl);
+
+    if (finalImageUrl.isEmpty) {
+      return _buildPlaceholderImage('Resim bulunamadı');
+    }
+
+    return GestureDetector(
+      onTap: () => _showFullScreenImage(finalImageUrl),
+      child: Container(
+        width: 120, // Daha büyük resim
+        height: 120,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _borderColor, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 8,
+              offset: Offset(0, 4),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: isCurrentPlaying ? Colors.grey.withOpacity(0.3) : Colors.black54,
-            blurRadius: isCurrentPlaying ? 15 : 10,
-            offset: Offset(0, 5),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Image.network(
+            finalImageUrl,
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              final progress = loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: progress,
+                  valueColor: AlwaysStoppedAnimation<Color>(_secondaryText),
+                  backgroundColor: _accentColor,
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return _buildPlaceholderImage('Resim yüklenemedi');
+            },
           ),
-        ],
-        border: isCurrentPlaying
-            ? Border.all(color: _accentGreen.withOpacity(0.5), width: 2)
-            : null,
+        ),
       ),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Row(
+    );
+  }
+
+  // TAM EKRAN RESİM GÖSTERME
+  void _showFullScreenImage(String imageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.9),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.all(20),
+        child: Stack(
           children: [
-            // Resim
-            _buildSampleImage(imageUrl),
-
-            SizedBox(width: 16),
-
-            // İçerik
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Başlık ve genre
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: _textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: 4),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _getGenreColor(genre).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _getGenreColor(genre).withOpacity(0.5),
-                        width: 1,
+            Center(
+              child: InteractiveViewer(
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: _cardColor,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                    child: Text(
-                      genre,
-                      style: TextStyle(
-                        color: _getGenreColor(genre),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                      child: Center(
+                        child: Text(
+                          'Resim yüklenemedi',
+                          style: TextStyle(color: _secondaryText),
+                        ),
                       ),
-                    ),
-                  ),
-                  SizedBox(height: 8),
-
-                  // Fiyat
-                  Text(
-                    price == 0 ? 'Ücretsiz' : '₺${price.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: price == 0 ? _accentGreen : _accentOrange,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                  // Progress bar (eğer bu sample oynatılıyorsa)
-                  if (isCurrentPlaying && _duration.inMilliseconds > 0)
-                    Column(
-                      children: [
-                        SizedBox(height: 8),
-                        LinearProgressIndicator(
-                          value: _position.inMilliseconds / _duration.inMilliseconds,
-                          backgroundColor: _textSecondary.withOpacity(0.3),
-                          valueColor: AlwaysStoppedAnimation<Color>(_accentGreen),
-                        ),
-                        SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${_position.inMinutes}:${(_position.inSeconds % 60).toString().padLeft(2, '0')}',
-                              style: TextStyle(color: _textSecondary, fontSize: 10),
-                            ),
-                            Text(
-                              '${_duration.inMinutes}:${(_duration.inSeconds % 60).toString().padLeft(2, '0')}',
-                              style: TextStyle(color: _textSecondary, fontSize: 10),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                ],
+                    );
+                  },
+                ),
               ),
             ),
-
-            // Aksiyon butonları
-            Column(
-              children: [
-                // Play/Pause button
-                if (demoUrl != null && demoUrl.isNotEmpty)
-                  GestureDetector(
-                    onTap: () => _playDemo(demoUrl, sampleId),
-                    child: AnimatedContainer(
-                      duration: Duration(milliseconds: 200),
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: isCurrentPlaying && _isPlaying
-                              ? [_accentGreen, _accentGreen.withOpacity(0.7)]
-                              : [_surfaceDark, _cardDark],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: isCurrentPlaying ? _accentGreen.withOpacity(0.3) : Colors.black26,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        isCurrentPlaying && _isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: _textPrimary,
-                        size: 24,
-                      ),
-                    ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-
-                SizedBox(height: 8),
-
-                // Download button
-                if (isDownloadable)
-                  GestureDetector(
-                    onTap: isDownloadingThis ? null : () => _downloadMainContent(sampleId, title),
-                    child: AnimatedContainer(
-                      duration: Duration(milliseconds: 200),
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: isDownloadingThis
-                              ? [_accentOrange, _accentOrange.withOpacity(0.7)]
-                              : [_surfaceDark, _cardDark],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: isDownloadingThis ? _accentOrange.withOpacity(0.3) : Colors.black26,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: isDownloadingThis
-                          ? Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: _downloadProgress,
-                            color: _textPrimary,
-                            strokeWidth: 2,
-                          ),
-                          Text(
-                            '${(_downloadProgress * 100).toInt()}%',
-                            style: TextStyle(
-                              color: _textPrimary,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      )
-                          : Icon(
-                        Icons.download,
-                        color: _textPrimary,
-                        size: 20,
-                      ),
-                    ),
+                  child: Icon(
+                    Icons.close,
+                    color: _primaryText,
+                    size: 24,
                   ),
-              ],
+                ),
+              ),
             ),
           ],
         ),
@@ -741,133 +675,273 @@ class _SampleBankScreenState extends State<SampleBankScreen>
     );
   }
 
-  Color _getGenreColor(String? genre) {
-    switch (genre?.toLowerCase()) {
-      case 'house':
-        return Colors.purple[400]!;
-      case 'techno':
-        return Colors.red[400]!;
-      case 'trap':
-        return Colors.orange[400]!;
-      case 'hip hop':
-        return Colors.amber[400]!;
-      case 'electronic':
-        return Colors.blue[400]!;
-      case 'ambient':
-        return Colors.teal[400]!;
-      case 'pop':
-        return Colors.pink[400]!;
-      case 'rock':
-        return Colors.brown[400]!;
-      default:
-        return _textSecondary;
-    }
-  }
-
-  Widget _buildShimmerCard() {
+  Widget _buildPlaceholderImage(String text) {
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 1200),
-        height: 140,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              _cardDark,
-              _surfaceDark,
-              _cardDark,
-            ],
-            stops: [0.0, 0.5, 1.0],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              colors: [
-                Colors.grey[800]!.withOpacity(0.8),
-                Colors.grey[700]!.withOpacity(0.3),
-                Colors.grey[800]!.withOpacity(0.8),
-              ],
-              stops: [0.0, 0.5, 1.0],
-            ),
-          ),
-        ),
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
       ),
-    );
-  }
-
-  // FİLTRE CHIPS
-  Widget _buildFilterChips() {
-    return Container(
-      height: 50,
-      margin: EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Genre Filter
-          Expanded(
-            child: GestureDetector(
-              onTap: _showGenreSelector,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _surfaceDark,
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: _textSecondary.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _selectedGenre,
-                      style: TextStyle(color: _textPrimary, fontSize: 14),
-                    ),
-                    Icon(Icons.arrow_drop_down, color: _textSecondary),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          SizedBox(width: 12),
-
-          // Price Filter
-          Expanded(
-            child: GestureDetector(
-              onTap: _showPriceSelector,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _surfaceDark,
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: _textSecondary.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _selectedPriceFilter,
-                      style: TextStyle(color: _textPrimary, fontSize: 14),
-                    ),
-                    Icon(Icons.arrow_drop_down, color: _textSecondary),
-                  ],
-                ),
-              ),
-            ),
+          Icon(Icons.image_outlined, color: _secondaryText, size: 32),
+          SizedBox(height: 8),
+          Text(
+            text,
+            style: TextStyle(color: _tertiaryText, fontSize: 10),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  // GENRE SELECTOR
-  void _showGenreSelector() {
+  Color _getGenreColor(String genre) {
+    switch (genre.toLowerCase()) {
+      case 'trap':
+        return _primaryText;
+      case 'hip-hop':
+        return _secondaryText;
+      case 'drill':
+        return _accentColor;
+      case 'rnb':
+        return _tertiaryText;
+      default:
+        return _secondaryText;
+    }
+  }
+
+  // SAMPLE CARD WIDGET - Download butonu sabit konumda
+  Widget _buildSampleCard(dynamic sample) {
+    final String sampleId = sample['_id']?.toString() ?? '';
+    final String title = sample['title']?.toString() ?? 'Başlık Yok';
+    final String genre = sample['genre']?.toString() ?? 'Genre Yok';
+    final String imageUrl = sample['imageUrl']?.toString() ?? '';
+    final double price = (sample['price'] ?? 0).toDouble();
+    String? demoUrl = sample['demoUrl']?.toString();
+    final bool isCurrentPlaying = _currentPlayingId == sampleId;
+    final bool isDownloadable = sample['paymentStatus']?.toString() == 'free' ||
+        sample['paymentStatus']?.toString() == 'paid' || price == 0;
+    final bool isDownloadingThis = _downloadingItemId == sampleId && _isDownloading;
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sol taraf - Resim
+            _buildSampleImage(imageUrl),
+
+            SizedBox(width: 16),
+
+            // Orta - İçerik ve Progress
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Başlık
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: _primaryText,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
+                      height: 1.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: 3),
+
+                  // Genre
+                  Text(
+                    genre,
+                    style: TextStyle(
+                      color: _secondaryText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: -0.05,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+
+                  // Fiyat
+                  Text(
+                    price == 0 ? 'Ücretsiz' : '₺${price.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: price == 0 ? _primaryText : _tertiaryText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: -0.05,
+                    ),
+                  ),
+
+                  // Progress bar (sadece oynatılıyorsa)
+                  if (isCurrentPlaying) ...[
+                    SizedBox(height: 8),
+                    Container(
+                      height: 2,
+                      decoration: BoxDecoration(
+                        color: _tertiaryText.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            height: 2,
+                            decoration: BoxDecoration(
+                              color: _tertiaryText.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                          ),
+                          if (_duration.inMilliseconds > 0)
+                            FractionallySizedBox(
+                              widthFactor: _position.inMilliseconds / _duration.inMilliseconds,
+                              child: Container(
+                                height: 2,
+                                decoration: BoxDecoration(
+                                  color: _primaryText,
+                                  borderRadius: BorderRadius.circular(1),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${_position.inMinutes}:${(_position.inSeconds % 60).toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            color: _tertiaryText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        Text(
+                          '${_duration.inMinutes}:${(_duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            color: _tertiaryText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  // Download butonu (her zaman aynı yerde - music bar'ın altında)
+                  if (isDownloadable) ...[
+                    SizedBox(height: 8),
+                    SizedBox(
+                      width: 100,
+                      child: GestureDetector(
+                        onTap: isDownloadingThis
+                            ? null
+                            : () => _downloadMainContent(sampleId, title),
+                        child: Container(
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: _surfaceColor,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: _borderColor.withOpacity(0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (isDownloadingThis)
+                                SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                    value: _downloadProgress,
+                                    valueColor: AlwaysStoppedAnimation<Color>(_primaryText),
+                                    backgroundColor: _tertiaryText,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              else
+                                Icon(
+                                  Icons.download_outlined,
+                                  color: _primaryText,
+                                  size: 14,
+                                ),
+                              SizedBox(width: 4),
+                              Text(
+                                isDownloadingThis ? 'İndiriliyor' : 'Download',
+                                style: TextStyle(
+                                  color: _primaryText,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: -0.05,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            SizedBox(width: 12),
+
+            // Sağ taraf - Play butonu (sabit konum)
+            if (demoUrl != null && demoUrl.isNotEmpty)
+              GestureDetector(
+                onTap: () => _playDemo(demoUrl, sampleId),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: isCurrentPlaying && _isPlaying
+                        ? _primaryText
+                        : _surfaceColor,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isCurrentPlaying && _isPlaying
+                          ? _primaryText
+                          : _borderColor.withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    isCurrentPlaying && _isPlaying
+                        ? Icons.pause
+                        : Icons.play_arrow,
+                    color: isCurrentPlaying && _isPlaying
+                        ? _backgroundColor
+                        : _primaryText,
+                    size: 20,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Filter UI
+  void _showGenreFilter() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _surfaceDark,
+      backgroundColor: _surfaceColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -879,27 +953,27 @@ class _SampleBankScreenState extends State<SampleBankScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Kategori Seçin',
+                'Genre Seç',
                 style: TextStyle(
-                  color: _textPrimary,
-                  fontSize: 18,
+                  color: _primaryText,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               SizedBox(height: 16),
               ..._genres.map((genre) {
-                final isSelected = genre == _selectedGenre;
+                final bool isSelected = _selectedGenre == genre;
                 return ListTile(
                   title: Text(
                     genre,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : _textPrimary,
+                      color: isSelected ? _primaryText : _secondaryText,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                   leading: Icon(
                     isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                    color: isSelected ? Colors.white : _textSecondary,
+                    color: isSelected ? _primaryText : _secondaryText,
                   ),
                   onTap: () {
                     setState(() {
@@ -916,13 +990,12 @@ class _SampleBankScreenState extends State<SampleBankScreen>
     );
   }
 
-  // PRICE SELECTOR
-  void _showPriceSelector() {
-    final priceOptions = ['Tümü', 'Ücretsiz', 'Ücretli'];
+  void _showPriceFilter() {
+    final List<String> priceOptions = ['Tümü', 'Ücretsiz', 'Ücretli'];
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: _surfaceDark,
+      backgroundColor: _surfaceColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -936,25 +1009,25 @@ class _SampleBankScreenState extends State<SampleBankScreen>
               Text(
                 'Fiyat Filtresi',
                 style: TextStyle(
-                  color: _textPrimary,
-                  fontSize: 18,
+                  color: _primaryText,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               SizedBox(height: 16),
               ...priceOptions.map((option) {
-                final isSelected = option == _selectedPriceFilter;
+                final bool isSelected = _selectedPriceFilter == option;
                 return ListTile(
                   title: Text(
                     option,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : _textPrimary,
+                      color: isSelected ? _primaryText : _secondaryText,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                   leading: Icon(
                     isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                    color: isSelected ? Colors.white : _textSecondary,
+                    color: isSelected ? _primaryText : _secondaryText,
                   ),
                   onTap: () {
                     setState(() {
@@ -977,56 +1050,51 @@ class _SampleBankScreenState extends State<SampleBankScreen>
     final filteredSamples = _filteredSamples;
 
     return Scaffold(
-      backgroundColor: _backgroundDark,
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        backgroundColor: _backgroundDark,
+        backgroundColor: _backgroundColor,
         elevation: 0,
         title: Text(
           'Sample Bank',
           style: TextStyle(
-            color: _textPrimary,
+            color: _primaryText,
             fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
         ),
         titleSpacing: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: _textPrimary),
+          icon: Icon(Icons.arrow_back_ios, color: _primaryText),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh_rounded, color: _textPrimary),
+            icon: Icon(Icons.refresh_rounded, color: _primaryText),
             onPressed: _refreshSamples,
           ),
         ],
       ),
       body: Column(
         children: [
-          // Arama çubuğu
+          // Arama çubuğu - Minimal
           Container(
-            margin: EdgeInsets.all(16),
+            margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            height: 42,
             decoration: BoxDecoration(
-              color: _surfaceDark,
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 10,
-                  offset: Offset(0, 2),
-                ),
-              ],
+              color: _surfaceColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _borderColor.withOpacity(0.3)),
             ),
             child: TextField(
               controller: _searchController,
-              style: TextStyle(color: _textPrimary),
+              style: TextStyle(color: _primaryText, fontSize: 15),
               decoration: InputDecoration(
                 hintText: 'Sample ara...',
-                hintStyle: TextStyle(color: _textSecondary),
-                prefixIcon: Icon(Icons.search, color: _textSecondary),
+                hintStyle: TextStyle(color: _secondaryText, fontSize: 15),
+                prefixIcon: Icon(Icons.search, color: _secondaryText, size: 20),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                  icon: Icon(Icons.clear, color: _textSecondary),
+                  icon: Icon(Icons.clear, color: _secondaryText, size: 18),
                   onPressed: () {
                     _searchController.clear();
                     setState(() {
@@ -1046,17 +1114,112 @@ class _SampleBankScreenState extends State<SampleBankScreen>
             ),
           ),
 
-          // Filtre çipleri
-          _buildFilterChips(),
+          // Filtre butonları - Minimal
+          Container(
+            height: 40,
+            margin: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            child: Row(
+              children: [
+                // Genre filtresi
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _showGenreFilter,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _surfaceColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _borderColor.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _selectedGenre,
+                            style: TextStyle(
+                              color: _primaryText,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(Icons.keyboard_arrow_down, color: _secondaryText, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                SizedBox(width: 10),
+
+                // Fiyat filtresi
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _showPriceFilter,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _surfaceColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _borderColor.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _selectedPriceFilter,
+                            style: TextStyle(
+                              color: _primaryText,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(Icons.keyboard_arrow_down, color: _secondaryText, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
 
           SizedBox(height: 8),
 
-          // Ana içerik
+          // Sonuç sayısı - Minimal
+          if (!_isLoading)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                '${filteredSamples.length} sample',
+                style: TextStyle(
+                  color: _tertiaryText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+
+          SizedBox(height: 6),
+
+          // Sample listesi
           Expanded(
             child: _isLoading
-                ? ListView.builder(
-              itemCount: 6,
-              itemBuilder: (context, index) => _buildShimmerCard(),
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(_primaryText),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Samples yükleniyor...',
+                    style: TextStyle(color: _secondaryText),
+                  ),
+                ],
+              ),
             )
                 : filteredSamples.isEmpty
                 ? Center(
@@ -1065,80 +1228,75 @@ class _SampleBankScreenState extends State<SampleBankScreen>
                 children: [
                   Icon(
                     Icons.music_off,
+                    color: _secondaryText,
                     size: 64,
-                    color: _textSecondary,
                   ),
                   SizedBox(height: 16),
                   Text(
-                    _samples.isEmpty
-                        ? 'Henüz sample yüklenmemiş'
-                        : 'Filtreye uygun sample bulunamadı',
+                    'Hiç sample bulunamadı',
                     style: TextStyle(
-                      color: _textSecondary,
-                      fontSize: 16,
+                      color: _primaryText,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _refreshSamples,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _accentGreen,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      child: Text('Yenile'),
+                  SizedBox(height: 8),
+                  Text(
+                    'Farklı filtreler deneyin',
+                    style: TextStyle(
+                      color: _secondaryText,
+                      fontSize: 14,
                     ),
                   ),
                 ],
               ),
             )
                 : RefreshIndicator(
+              color: _primaryText,
+              backgroundColor: _surfaceColor,
               onRefresh: _refreshSamples,
-              color: _accentGreen,
-              backgroundColor: _surfaceDark,
               child: ListView.builder(
                 controller: _scrollController,
                 physics: AlwaysScrollableScrollPhysics(),
                 itemCount: filteredSamples.length,
                 itemBuilder: (context, index) {
-                  return _buildSampleCard(filteredSamples[index]);
+                  return FadeTransition(
+                    opacity: Tween<double>(
+                      begin: 0.0,
+                      end: 1.0,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _animationController,
+                        curve: Interval(
+                          (index / filteredSamples.length) * 0.5,
+                          1.0,
+                          curve: Curves.easeOut,
+                        ),
+                      ),
+                    ),
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: Offset(0, 0.3),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: _animationController,
+                          curve: Interval(
+                            (index / filteredSamples.length) * 0.5,
+                            1.0,
+                            curve: Curves.easeOut,
+                          ),
+                        ),
+                      ),
+                      child: _buildSampleCard(filteredSamples[index]),
+                    ),
+                  );
                 },
               ),
             ),
           ),
         ],
       ),
-      // Floating Action Button - Currently playing info
-      floatingActionButton: _currentPlayingId != null
-          ? Container(
-        width: 60,
-        height: 60,
-        child: FloatingActionButton(
-          backgroundColor: _accentGreen,
-          onPressed: () {
-            if (_isPlaying) {
-              _audioPlayer.pause();
-            } else {
-              _audioPlayer.play();
-            }
-          },
-          child: AnimatedSwitcher(
-            duration: Duration(milliseconds: 200),
-            child: Icon(
-              _isPlaying ? Icons.pause : Icons.play_arrow,
-              key: ValueKey(_isPlaying),
-              color: Colors.white,
-              size: 30,
-            ),
-          ),
-        ),
-      )
-          : null,
     );
   }
 }
