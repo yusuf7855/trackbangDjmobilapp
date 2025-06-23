@@ -39,7 +39,7 @@ class _SampleBankScreenState extends State<SampleBankScreen>
 
   // Filter states
   String _selectedGenre = 'Tümü';
-  String _selectedPriceFilter = 'Tümü';
+  String _selectedPriceFilter = 'Ücretli';
   List<String> _genres = ['Tümü'];
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -220,75 +220,36 @@ class _SampleBankScreenState extends State<SampleBankScreen>
   }
 
   void _showErrorSnackBar(String message) {
-    // Güvenli ScaffoldMessenger kullanımı
-    if (mounted) {
-      try {
-        if (_scaffoldMessenger != null) {
-          _scaffoldMessenger!.showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: Colors.grey[800],
-              duration: Duration(seconds: 3),
-            ),
-          );
-        } else {
-          // Fallback: context üzerinden dene
-          final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-          if (scaffoldMessenger != null) {
-            scaffoldMessenger.showSnackBar(
-              SnackBar(
-                content: Text(message),
-                backgroundColor: Colors.grey[800],
-                duration: Duration(seconds: 3),
-              ),
-            );
-          } else {
-            print('Error message (no ScaffoldMessenger): $message');
-          }
-        }
-      } catch (e) {
-        print('SnackBar error: $e - Message: $message');
-      }
-    } else {
-      print('Error message (not mounted): $message');
+    if (!mounted) return;
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      print('SnackBar error: $e - Message: $message');
     }
   }
 
   void _showSuccessSnackBar(String message) {
-    // Güvenli ScaffoldMessenger kullanımı
-    if (mounted) {
-      try {
-        if (_scaffoldMessenger != null) {
-          _scaffoldMessenger!.showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: _accentColor,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        } else {
-          // Fallback: context üzerinden dene
-          final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-          if (scaffoldMessenger != null) {
-            scaffoldMessenger.showSnackBar(
-              SnackBar(
-                content: Text(message),
-                backgroundColor: _accentColor,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          } else {
-            print('Success message (no ScaffoldMessenger): $message');
-          }
-        }
-      } catch (e) {
-        print('SnackBar error: $e - Message: $message');
-      }
-    } else {
-      print('Success message (not mounted): $message');
+    if (!mounted) return;
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      print('SnackBar error: $e - Message: $message');
     }
   }
-
   // FİLTRELEME
   List<dynamic> get _filteredSamples {
     return _samples.where((sample) {
@@ -350,13 +311,14 @@ class _SampleBankScreenState extends State<SampleBankScreen>
 
   // İNDİRME FONKSİYONU - DÜZELTME
   Future<void> _downloadMainContent(String sampleId, String title) async {
-    if (_isDownloading) return;
+    if (_isDownloading || !mounted) return;
 
-    // Boş değer kontrolü
     if (sampleId.isEmpty) {
-      _showErrorSnackBar('Sample ID bulunamadı');
+      if (mounted) _showErrorSnackBar('Sample ID bulunamadı');
       return;
     }
+
+    if (!mounted) return;
 
     setState(() {
       _isDownloading = true;
@@ -367,46 +329,41 @@ class _SampleBankScreenState extends State<SampleBankScreen>
     _progressAnimationController.forward();
 
     try {
-      // İzin kontrolü
+      // Android 13+ için yeni izin sistemi
       if (Platform.isAndroid) {
-        var status = await Permission.storage.status;
-        if (!status.isGranted) {
-          status = await Permission.storage.request();
-          if (!status.isGranted) {
-            _showErrorSnackBar('Depolama izni gerekli');
-            setState(() {
-              _isDownloading = false;
-              _downloadingItemId = '';
-            });
-            return;
-          }
+        // API 33+ (Android 13) için MANAGE_EXTERNAL_STORAGE izni gerekebilir
+        var storageStatus = await Permission.storage.status;
+        var manageStorageStatus = await Permission.manageExternalStorage.status;
+
+        if (!storageStatus.isGranted) {
+          storageStatus = await Permission.storage.request();
+        }
+
+        if (!manageStorageStatus.isGranted) {
+          manageStorageStatus = await Permission.manageExternalStorage.request();
+        }
+
+        if (!storageStatus.isGranted && !manageStorageStatus.isGranted) {
+          if (mounted) _showErrorSnackBar('Depolama izni gerekli');
+          return;
         }
       }
 
       // Token oluştur
       String tokenApiUrl = '${UrlConstants.apiBaseUrl}/api/samples/download/generate';
 
-      print('Token API URL: $tokenApiUrl');
-      print('Sample ID: $sampleId');
-
       final tokenResponse = await _dio.post(
         tokenApiUrl,
         data: {'sampleId': sampleId},
         options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: {'Content-Type': 'application/json'},
         ),
       );
-
-      print('Token Response: ${tokenResponse.statusCode}');
-      print('Token Data: ${tokenResponse.data}');
 
       if (tokenResponse.statusCode != 200 || tokenResponse.data == null) {
         throw Exception('Token oluşturulamadı: ${tokenResponse.statusMessage}');
       }
 
-      // Token'ı farklı field'lardan dene
       String? token;
       if (tokenResponse.data is Map<String, dynamic>) {
         token = tokenResponse.data['token'] ??
@@ -420,33 +377,43 @@ class _SampleBankScreenState extends State<SampleBankScreen>
         throw Exception('Download token alınamadı');
       }
 
-      print('Download token: $token');
-
-      // İndirme URL'si
       String downloadUrl = '${UrlConstants.apiBaseUrl}/api/samples/download/$token';
-      print('Download URL: $downloadUrl');
 
-      // Dosya yolunu belirle
+      // DÜZELTME: Dosya yolunu telefonda görünür Downloads klasörüne ayarla
       Directory? directory;
       String fileName = '${title.replaceAll(RegExp(r'[^\w\s-.]'), '_')}.wav';
 
       if (Platform.isAndroid) {
-        directory = await getExternalStorageDirectory();
-        if (directory != null) {
-          String musicPath = '${directory.path}/Music';
-          await Directory(musicPath).create(recursive: true);
-          directory = Directory(musicPath);
+        // Genel Downloads klasörü - telefonda görünür
+        directory = Directory('/storage/emulated/0/Download');
+
+        // Alternatif yollar dene
+        if (!await directory.exists()) {
+          directory = Directory('/storage/emulated/0/Downloads');
+        }
+
+        if (!await directory.exists()) {
+          // App-specific external storage (son çare)
+          directory = await getExternalStorageDirectory();
+          if (directory != null) {
+            // Public Music klasörü oluştur
+            String publicMusicPath = '/storage/emulated/0/Music';
+            directory = Directory(publicMusicPath);
+            if (!await directory.exists()) {
+              await directory.create(recursive: true);
+            }
+          }
         }
       } else {
         directory = await getApplicationDocumentsDirectory();
       }
 
-      if (directory == null) {
-        throw Exception('Dosya dizini oluşturulamadı');
+      if (directory == null || !await directory.exists()) {
+        throw Exception('Downloads klasörü bulunamadı');
       }
 
       String filePath = '${directory.path}/$fileName';
-      print('File path: $filePath');
+      print('Dosya kaydediliyor: $filePath');
 
       // Dosyayı indir
       await _dio.download(
@@ -457,28 +424,39 @@ class _SampleBankScreenState extends State<SampleBankScreen>
             setState(() {
               _downloadProgress = received / total;
             });
-            print('Download progress: ${(_downloadProgress * 100).toStringAsFixed(1)}%');
+            print('İndirme: ${(_downloadProgress * 100).toStringAsFixed(1)}%');
           }
         },
         options: Options(
-          headers: {
-            'Accept': '*/*',
-          },
+          headers: {'Accept': '*/*'},
         ),
       );
 
-      _showSuccessSnackBar('İndirme tamamlandı: $fileName');
+      // Dosyanın gerçekten kaydedildiğini kontrol et
+      final file = File(filePath);
+      if (await file.exists()) {
+        final fileSize = await file.length();
+        print('Dosya başarıyla kaydedildi: $filePath (${fileSize} bytes)');
 
-      // Dosyayı aç
-      try {
-        await OpenFile.open(filePath);
-      } catch (e) {
-        print('File open error: $e');
-        // Dosya açma hatası kritik değil
+        if (mounted) {
+          _showSuccessSnackBar('İndirme tamamlandı: $fileName\nKonum: ${directory.path}');
+        }
+
+        // Dosyayı açmaya çalış
+        try {
+          await OpenFile.open(filePath);
+        } catch (e) {
+          print('Dosya açma hatası: $e');
+          if (mounted) {
+            _showErrorSnackBar('Dosya kaydedildi ama açılamadı. Manuel olarak Downloads klasörünü kontrol edin.');
+          }
+        }
+      } else {
+        throw Exception('Dosya kaydedilemedi');
       }
 
     } catch (e) {
-      print('Download error: $e');
+      print('İndirme hatası: $e');
       String errorMessage = 'İndirme hatası';
 
       if (e is DioException) {
@@ -495,7 +473,9 @@ class _SampleBankScreenState extends State<SampleBankScreen>
         errorMessage = 'İndirme hatası: ${e.toString()}';
       }
 
-      _showErrorSnackBar(errorMessage);
+      if (mounted) {
+        _showErrorSnackBar(errorMessage);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -503,11 +483,13 @@ class _SampleBankScreenState extends State<SampleBankScreen>
           _downloadingItemId = '';
           _downloadProgress = 0.0;
         });
+
+        if (_progressAnimationController.isAnimating) {
+          _progressAnimationController.reverse();
+        }
       }
-      _progressAnimationController.reverse();
     }
   }
-
   // URL BUILDER - Resim için optimize edilmiş
   String _buildImageUrl(String imageUrl) {
     if (imageUrl.isEmpty) return '';
@@ -991,7 +973,7 @@ class _SampleBankScreenState extends State<SampleBankScreen>
   }
 
   void _showPriceFilter() {
-    final List<String> priceOptions = ['Tümü', 'Ücretsiz', 'Ücretli'];
+    final List<String> priceOptions = ['Ücretsiz', 'Ücretli'];
 
     showModalBottomSheet(
       context: context,
@@ -1189,19 +1171,6 @@ class _SampleBankScreenState extends State<SampleBankScreen>
 
           // Sonuç sayısı - Minimal
           if (!_isLoading)
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                '${filteredSamples.length} sample',
-                style: TextStyle(
-                  color: _tertiaryText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
-
-          SizedBox(height: 6),
 
           // Sample listesi
           Expanded(
