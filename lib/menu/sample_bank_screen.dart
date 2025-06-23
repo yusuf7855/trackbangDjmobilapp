@@ -220,32 +220,39 @@ class _SampleBankScreenState extends State<SampleBankScreen>
   }
 
   void _showErrorSnackBar(String message) {
+    // Widget mounted kontrolü ve güvenli context kullanımı
     if (!mounted) return;
 
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+      if (scaffoldMessenger != null) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
     } catch (e) {
       print('SnackBar error: $e - Message: $message');
     }
   }
-
   void _showSuccessSnackBar(String message) {
+    // Widget mounted kontrolü ve güvenli context kullanımı
     if (!mounted) return;
 
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+      if (scaffoldMessenger != null) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       print('SnackBar error: $e - Message: $message');
     }
@@ -329,9 +336,8 @@ class _SampleBankScreenState extends State<SampleBankScreen>
     _progressAnimationController.forward();
 
     try {
-      // Android 13+ için yeni izin sistemi
+      // Android izinleri kontrolü
       if (Platform.isAndroid) {
-        // API 33+ (Android 13) için MANAGE_EXTERNAL_STORAGE izni gerekebilir
         var storageStatus = await Permission.storage.status;
         var manageStorageStatus = await Permission.manageExternalStorage.status;
 
@@ -349,54 +355,65 @@ class _SampleBankScreenState extends State<SampleBankScreen>
         }
       }
 
-      // Token oluştur
+      // Token oluştur - DÜZELTME: Port kontrolü
       String tokenApiUrl = '${UrlConstants.apiBaseUrl}/api/samples/download/generate';
+      print('Token API URL: $tokenApiUrl');
 
       final tokenResponse = await _dio.post(
         tokenApiUrl,
         data: {'sampleId': sampleId},
         options: Options(
           headers: {'Content-Type': 'application/json'},
+          validateStatus: (status) => status! < 500, // 404'ü exception olarak kabul etme
         ),
       );
+
+      print('Token response status: ${tokenResponse.statusCode}');
+      print('Token response: ${tokenResponse.data}');
 
       if (tokenResponse.statusCode != 200 || tokenResponse.data == null) {
         throw Exception('Token oluşturulamadı: ${tokenResponse.statusMessage}');
       }
 
       String? token;
+      String? downloadUrl;
+
       if (tokenResponse.data is Map<String, dynamic>) {
         token = tokenResponse.data['token'] ??
             tokenResponse.data['downloadToken'] ??
             tokenResponse.data['access_token'];
+        downloadUrl = tokenResponse.data['downloadUrl'];
       } else if (tokenResponse.data is String) {
         token = tokenResponse.data;
       }
 
       if (token == null || token.isEmpty) {
+        print('Token response data: ${tokenResponse.data}');
         throw Exception('Download token alınamadı');
       }
 
-      String downloadUrl = '${UrlConstants.apiBaseUrl}/api/samples/download/$token';
+      // DÜZELTME: Backend'den gelen downloadUrl'i kullan, yoksa manuel oluştur
+      String finalDownloadUrl;
+      if (downloadUrl != null && downloadUrl.isNotEmpty) {
+        finalDownloadUrl = downloadUrl;
+      } else {
+        finalDownloadUrl = '${UrlConstants.apiBaseUrl}/api/download/$token';
+      }
 
-      // DÜZELTME: Dosya yolunu telefonda görünür Downloads klasörüne ayarla
+      print('Final download URL: $finalDownloadUrl');
+
+      // Dosya yolu belirleme
       Directory? directory;
-      String fileName = '${title.replaceAll(RegExp(r'[^\w\s-.]'), '_')}.wav';
+      String fileName = '${title.replaceAll(RegExp(r'[^\w\s-.]'), '_')}.zip';
 
       if (Platform.isAndroid) {
-        // Genel Downloads klasörü - telefonda görünür
         directory = Directory('/storage/emulated/0/Download');
-
-        // Alternatif yollar dene
         if (!await directory.exists()) {
           directory = Directory('/storage/emulated/0/Downloads');
         }
-
         if (!await directory.exists()) {
-          // App-specific external storage (son çare)
           directory = await getExternalStorageDirectory();
           if (directory != null) {
-            // Public Music klasörü oluştur
             String publicMusicPath = '/storage/emulated/0/Music';
             directory = Directory(publicMusicPath);
             if (!await directory.exists()) {
@@ -415,9 +432,9 @@ class _SampleBankScreenState extends State<SampleBankScreen>
       String filePath = '${directory.path}/$fileName';
       print('Dosya kaydediliyor: $filePath');
 
-      // Dosyayı indir
-      await _dio.download(
-        downloadUrl,
+      // Dosyayı indir - DÜZELTME: Hata handling
+      final downloadResponse = await _dio.download(
+        finalDownloadUrl,
         filePath,
         onReceiveProgress: (received, total) {
           if (total != -1 && mounted) {
@@ -429,8 +446,14 @@ class _SampleBankScreenState extends State<SampleBankScreen>
         },
         options: Options(
           headers: {'Accept': '*/*'},
+          validateStatus: (status) => status! < 500,
         ),
       );
+
+      // İndirme response kontrolü
+      if (downloadResponse.statusCode != 200) {
+        throw Exception('İndirme başarısız: ${downloadResponse.statusCode} - ${downloadResponse.statusMessage}');
+      }
 
       // Dosyanın gerçekten kaydedildiğini kontrol et
       final file = File(filePath);
@@ -461,9 +484,11 @@ class _SampleBankScreenState extends State<SampleBankScreen>
 
       if (e is DioException) {
         if (e.response?.statusCode == 404) {
-          errorMessage = 'Sample bulunamadı';
+          errorMessage = 'Dosya bulunamadı - Sunucuda bu sample mevcut değil';
         } else if (e.response?.statusCode == 401) {
           errorMessage = 'Yetki hatası';
+        } else if (e.response?.statusCode == 403) {
+          errorMessage = 'Erişim engellendi';
         } else if (e.response?.statusCode == 500) {
           errorMessage = 'Sunucu hatası';
         } else {
@@ -484,13 +509,18 @@ class _SampleBankScreenState extends State<SampleBankScreen>
           _downloadProgress = 0.0;
         });
 
-        if (_progressAnimationController.isAnimating) {
-          _progressAnimationController.reverse();
+        // Animation controller'ı güvenli şekilde durdur
+        try {
+          if (_progressAnimationController.isAnimating) {
+            _progressAnimationController.reverse();
+          }
+        } catch (e) {
+          print('Animation controller error: $e');
         }
       }
     }
   }
-  // URL BUILDER - Resim için optimize edilmiş
+
   String _buildImageUrl(String imageUrl) {
     if (imageUrl.isEmpty) return '';
 
