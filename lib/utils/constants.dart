@@ -1,38 +1,36 @@
 // lib/utils/constants.dart
 class Constants {
-  // API Configuration
-  static const String apiBaseUrl = 'http://YOUR_API_URL:5000'; // API URL'inizi buraya yazın
+  // API Base URL - backend URL'nizi buraya yazın
+  static const String apiBaseUrl = 'http://localhost:3000'; // Kendi backend URL'nizi yazın
 
-  // Firebase Configuration (google-services.json/plist'ten alınır)
-  static const String firebaseProjectId = 'your-firebase-project-id';
+  // Notification API endpoints
+  static const String notificationRegisterToken = '/api/notifications/register-token';
+  static const String notificationUserEndpoint = '/api/notifications/user';
+  static const String notificationSettingsEndpoint = '/api/notifications/settings';
+  static const String notificationSendEndpoint = '/api/notifications/send';
+  static const String notificationHistoryEndpoint = '/api/notifications/history';
+  static const String notificationStatsEndpoint = '/api/notifications/stats';
 
-  // SharedPreferences Keys
-  static const String keyAuthToken = 'auth_token';
-  static const String keyUserId = 'user_id';
-  static const String keyFcmToken = 'fcm_token';
-  static const String keyNotificationSettings = 'notification_settings';
+  // Notification types
+  static const List<String> notificationTypes = [
+    'general',
+    'music',
+    'playlist',
+    'user',
+    'promotion',
+  ];
 
-  // Notification Types
-  static const String notificationTypeGeneral = 'general';
-  static const String notificationTypeMusic = 'music';
-  static const String notificationTypePlaylist = 'playlist';
-  static const String notificationTypeUser = 'user';
-  static const String notificationTypePromotion = 'promotion';
+  // Pagination
+  static const int defaultPageSize = 20;
+  static const int maxPageSize = 50;
 
-  // Notification Actions
-  static const String actionViewDetail = 'view_detail';
-  static const String actionClose = 'close';
-  static const String actionOpenUrl = 'open_url';
+  // Cache keys
+  static const String authTokenKey = 'auth_token';
+  static const String userIdKey = 'user_id';
+  static const String fcmTokenKey = 'fcm_token';
+  static const String notificationSettingsKey = 'notification_settings';
 
-  // Routes
-  static const String routeHome = '/';
-  static const String routeNotifications = '/notifications';
-  static const String routeMusicDetail = '/music-detail';
-  static const String routePlaylistDetail = '/playlist-detail';
-  static const String routeUserProfile = '/user-profile';
-  static const String routeLogin = '/login';
-
-  // Default notification settings
+  // Default values
   static const Map<String, dynamic> defaultNotificationSettings = {
     'enabled': true,
     'sound': true,
@@ -47,26 +45,43 @@ class Constants {
     },
   };
 
-  // Colors
-  static const int primaryColor = 0xFF2196F3;
-  static const int successColor = 0xFF4CAF50;
-  static const int errorColor = 0xFFF44336;
-  static const int warningColor = 0xFFFF9800;
+  // Animation durations
+  static const Duration shortAnimation = Duration(milliseconds: 300);
+  static const Duration mediumAnimation = Duration(milliseconds: 500);
+  static const Duration longAnimation = Duration(milliseconds: 800);
 
-  // Text Sizes
-  static const double textSizeSmall = 12.0;
-  static const double textSizeMedium = 14.0;
-  static const double textSizeLarge = 16.0;
-  static const double textSizeXLarge = 18.0;
+  // Colors
+  static const Map<String, int> brandColors = {
+    'primary': 0xFF1976D2,
+    'secondary': 0xFF424242,
+    'accent': 0xFFFF9800,
+    'error': 0xFFD32F2F,
+    'success': 0xFF388E3C,
+    'warning': 0xFFF57C00,
+  };
+
+  // Text sizes
+  static const Map<String, double> textSizes = {
+    'small': 12.0,
+    'medium': 14.0,
+    'large': 16.0,
+    'xlarge': 18.0,
+    'xxlarge': 20.0,
+    'title': 24.0,
+  };
 
   // Spacing
-  static const double spacingSmall = 8.0;
-  static const double spacingMedium = 16.0;
-  static const double spacingLarge = 24.0;
-  static const double spacingXLarge = 32.0;
+  static const Map<String, double> spacing = {
+    'xs': 4.0,
+    'sm': 8.0,
+    'md': 16.0,
+    'lg': 24.0,
+    'xl': 32.0,
+    'xxl': 48.0,
+  };
 
-  // Animation Durations
-  static const int animationDurationShort = 200;
-  static const int animationDurationMedium = 300;
-  static const int animationDurationLong = 500;
+  // Border radius
+  static const double borderRadius = 8.0;
+  static const double cardBorderRadius = 12.0;
+  static const double buttonBorderRadius = 25.0;
 }

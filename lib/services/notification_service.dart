@@ -31,6 +31,29 @@ class NotificationService {
     _context = context;
     await _initializeLocalNotifications();
     await _initializeFirebaseMessaging();
+    await _requestPermissions();
+  }
+
+  // Request permissions
+  Future<void> _requestPermissions() async {
+    // Firebase Messaging permissions
+    NotificationSettings settings = await _firebaseMessaging.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+      sound: true,
+    );
+
+    print('Kullanıcı izin durumu: ${settings.authorizationStatus}');
+
+    // Android notification permission (API 33+)
+    if (Platform.isAndroid) {
+      final status = await Permission.notification.request();
+      print('Android bildirim izni: $status');
+    }
   }
 
   // Local notifications setup
@@ -132,133 +155,48 @@ class NotificationService {
       }
     });
 
-    // Token refresh
-    FirebaseMessaging.instance.onTokenRefresh.listen(_onTokenRefresh);
+    // Register device token
+    await _registerDeviceToken();
   }
 
-  // Request permissions
-  Future<bool> requestPermissions() async {
+  // Register device token with backend
+  Future<void> _registerDeviceToken() async {
     try {
-      // Android 13+ notification permission
-      if (Platform.isAndroid) {
-        final status = await Permission.notification.request();
-        if (status != PermissionStatus.granted) {
-          _showPermissionDialog();
-          return false;
-        }
+      final token = await _firebaseMessaging.getToken();
+      if (token == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString(Constants.userIdKey);
+      final authToken = prefs.getString(Constants.authTokenKey);
+
+      if (userId == null || authToken == null) {
+        print('Kullanıcı girişi yapılmamış, token kaydedilemiyor');
+        return;
       }
 
-      // Firebase messaging permission
-      final settings = await _firebaseMessaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-        announcement: false,
-        carPlay: false,
-        criticalAlert: false,
-      );
-
-      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
-          settings.authorizationStatus != AuthorizationStatus.provisional) {
-        _showPermissionDialog();
-        return false;
-      }
-
-      print('Bildirim izni verildi: ${settings.authorizationStatus}');
-      return true;
-    } catch (e) {
-      print('İzin isteme hatası: $e');
-      return false;
-    }
-  }
-
-  // Show permission dialog
-  void _showPermissionDialog() {
-    if (_context == null) return;
-
-    showDialog(
-      context: _context!,
-      builder: (context) => AlertDialog(
-        title: const Text('Bildirim İzni Gerekli'),
-        content: const Text(
-          'Uygulamamızdan önemli güncellemeleri ve bildirimleri alabilmek için bildirim iznini etkinleştirmeniz gerekiyor.\n\n'
-              'Ayarlar > Uygulamalar > [Uygulama Adı] > Bildirimler bölümünden izni etkinleştirebilirsiniz.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('İptal'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              openAppSettings();
-            },
-            child: const Text('Ayarlara Git'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Get and register FCM token
-  Future<String?> getAndRegisterToken(String userId) async {
-    try {
-      final hasPermission = await requestPermissions();
-      if (!hasPermission) {
-        throw Exception('Bildirim izni verilmedi');
-      }
-
-      final fcmToken = await _firebaseMessaging.getToken();
-      if (fcmToken == null) {
-        throw Exception('FCM token alınamadı');
-      }
-
-      print('FCM Token: $fcmToken');
-
-      // Get device info
       final deviceInfo = await _getDeviceInfo();
 
-      // Register token with backend
       final response = await _dio.post(
-        '${Constants.apiBaseUrl}/api/notifications/register-token',
-        data: {
-          'fcmToken': fcmToken,
-          'platform': Platform.isAndroid ? 'android' : 'ios',
-          ...deviceInfo,
-          'notificationSettings': {
-            'enabled': true,
-            'sound': true,
-            'vibration': true,
-            'badge': true,
-            'types': {
-              'general': true,
-              'music': true,
-              'playlist': true,
-              'user': true,
-              'promotion': true,
-            },
-          },
-        },
+        '${Constants.apiBaseUrl}${Constants.notificationRegisterToken}',
         options: Options(
           headers: {
-            'Authorization': 'Bearer ${await _getAuthToken()}',
+            'Authorization': 'Bearer $authToken',
             'Content-Type': 'application/json',
           },
         ),
+        data: {
+          'fcmToken': token,
+          'deviceInfo': deviceInfo,
+          'platform': Platform.isIOS ? 'ios' : 'android',
+        },
       );
 
-      if (response.data['success']) {
-        print('Token başarıyla kaydedildi');
-        await _saveTokenLocally(fcmToken);
-        return fcmToken;
-      } else {
-        throw Exception(response.data['message']);
+      if (response.statusCode == 200) {
+        await prefs.setString(Constants.fcmTokenKey, token);
+        print('FCM token başarıyla kaydedildi');
       }
     } catch (e) {
-      print('Token kaydetme hatası: $e');
-      rethrow;
+      print('FCM token kaydetme hatası: $e');
     }
   }
 
@@ -276,7 +214,7 @@ class NotificationService {
           'osVersion': androidInfo.version.release,
           'appVersion': packageInfo.version,
         };
-      } else {
+      } else if (Platform.isIOS) {
         final iosInfo = await deviceInfo.iosInfo;
         return {
           'deviceId': iosInfo.identifierForVendor ?? 'unknown',
@@ -294,6 +232,13 @@ class NotificationService {
         'appVersion': packageInfo.version,
       };
     }
+
+    return {
+      'deviceId': 'unknown',
+      'deviceModel': 'unknown',
+      'osVersion': 'unknown',
+      'appVersion': packageInfo.version,
+    };
   }
 
   // Handle foreground messages
@@ -369,6 +314,89 @@ class NotificationService {
     _showLocalNotification(message);
   }
 
+  // Show local notification
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    final notification = message.notification;
+    if (notification == null) return;
+
+    final type = message.data['type'] ?? 'general';
+    final imageUrl = message.data['imageUrl'];
+
+    AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      type,
+      _getChannelName(type),
+      channelDescription: _getChannelDescription(type),
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      largeIcon: imageUrl != null
+          ? NetworkAssetAndroidBitmap(imageUrl)
+          : null,
+      styleInformation: imageUrl != null
+          ? BigPictureStyleInformation(
+        NetworkAssetAndroidBitmap(imageUrl),
+        contentTitle: notification.title,
+        summaryText: notification.body,
+      )
+          : BigTextStyleInformation(
+        notification.body ?? '',
+        contentTitle: notification.title,
+      ),
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      notification.title,
+      notification.body,
+      platformDetails,
+      payload: jsonEncode(message.data),
+    );
+  }
+
+  // Get channel name by type
+  String _getChannelName(String type) {
+    switch (type) {
+      case 'music':
+        return 'Müzik Bildirimleri';
+      case 'playlist':
+        return 'Playlist Bildirimleri';
+      case 'user':
+        return 'Kullanıcı Bildirimleri';
+      case 'promotion':
+        return 'Promosyon Bildirimleri';
+      default:
+        return 'Genel Bildirimler';
+    }
+  }
+
+  // Get channel description by type
+  String _getChannelDescription(String type) {
+    switch (type) {
+      case 'music':
+        return 'Müzik ile ilgili bildirimler';
+      case 'playlist':
+        return 'Playlist ile ilgili bildirimler';
+      case 'user':
+        return 'Kullanıcı etkileşim bildirimleri';
+      case 'promotion':
+        return 'Promosyon ve kampanya bildirimleri';
+      default:
+        return 'Genel uygulama bildirimleri';
+    }
+  }
+
   // Handle background/terminated message tapped
   void _handleBackgroundMessage(RemoteMessage message) {
     print('Background bildirim tıklandı: ${message.messageId}');
@@ -405,130 +433,45 @@ class NotificationService {
 
     final navigator = Navigator.of(_context!);
     final type = data['type'] ?? 'general';
+    final deepLink = data['deepLink'];
 
-    try {
-      switch (type) {
-        case 'music':
-          if (data['musicId'] != null) {
-            navigator.pushNamed('/music-detail', arguments: data['musicId']);
-          }
-          break;
-        case 'playlist':
-          if (data['playlistId'] != null) {
-            navigator.pushNamed('/playlist-detail', arguments: data['playlistId']);
-          }
-          break;
-        case 'user':
-          if (data['userId'] != null) {
-            navigator.pushNamed('/user-profile', arguments: data['userId']);
-          }
-          break;
-        case 'general':
-        default:
-          navigator.pushNamed('/notifications');
-          break;
-      }
-    } catch (e) {
-      print('Navigation hatası: $e');
-      navigator.pushNamed('/notifications');
+    // DeepLink varsa onu kullan
+    if (deepLink != null && deepLink.isNotEmpty) {
+      // DeepLink handling logic buraya
+      print('DeepLink: $deepLink');
+      return;
     }
-  }
 
-  // Show local notification
-  Future<void> _showLocalNotification(RemoteMessage message) async {
-    final type = message.data['type'] ?? 'default';
-
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'default',
-      'Genel Bildirimler',
-      channelDescription: 'Genel uygulama bildirimleri',
-      importance: Importance.high,
-      priority: Priority.high,
-      showWhen: true,
-      enableVibration: true,
-      playSound: true,
-    );
-
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      message.notification?.title,
-      message.notification?.body,
-      platformDetails,
-      payload: jsonEncode(message.data),
-    );
-  }
-
-  // Token refresh handler
-  Future<void> _onTokenRefresh(String token) async {
-    print('FCM Token yenilendi: $token');
-    try {
-      final userId = await _getUserId();
-      if (userId != null) {
-        await getAndRegisterToken(userId);
-      }
-    } catch (e) {
-      print('Token yenileme hatası: $e');
-    }
-  }
-
-  // Update notification settings
-  Future<bool> updateNotificationSettings(Map<String, dynamic> settings) async {
-    try {
-      final deviceInfo = await _getDeviceInfo();
-
-      final response = await _dio.put(
-        '${Constants.apiBaseUrl}/api/notifications/settings',
-        data: {
-          'deviceId': deviceInfo['deviceId'],
-          'settings': settings,
-        },
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer ${await _getAuthToken()}',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      return response.data['success'] == true;
-    } catch (e) {
-      print('Ayar güncelleme hatası: $e');
-      return false;
-    }
-  }
-
-  // Deactivate token (on logout)
-  Future<void> deactivateToken() async {
-    try {
-      final deviceInfo = await _getDeviceInfo();
-
-      await _dio.post(
-        '${Constants.apiBaseUrl}/api/notifications/deactivate-token',
-        data: {
-          'deviceId': deviceInfo['deviceId'],
-        },
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer ${await _getAuthToken()}',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      await _clearTokenLocally();
-    } catch (e) {
-      print('Token deaktive etme hatası: $e');
+    // Tip bazlı navigasyon
+    switch (type) {
+      case 'music':
+      // Müzik sayfasına git
+        navigator.pushNamed('/music');
+        break;
+      case 'playlist':
+      // Playlist sayfasına git
+        final playlistId = data['playlistId'];
+        if (playlistId != null) {
+          navigator.pushNamed('/playlist', arguments: {'id': playlistId});
+        } else {
+          navigator.pushNamed('/playlists');
+        }
+        break;
+      case 'user':
+      // Profil sayfasına git
+        final userId = data['userId'];
+        if (userId != null) {
+          navigator.pushNamed('/profile', arguments: {'userId': userId});
+        }
+        break;
+      case 'promotion':
+      // Promosyon sayfasına git
+        navigator.pushNamed('/promotions');
+        break;
+      default:
+      // Bildirimler sayfasına git
+        navigator.pushNamed('/notifications');
+        break;
     }
   }
 
@@ -537,24 +480,109 @@ class NotificationService {
     _onNotificationTapped = callback;
   }
 
-  // Helper methods
-  Future<String?> _getAuthToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
+  // Update notification settings
+  Future<bool> updateNotificationSettings(Map<String, dynamic> settings) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString(Constants.authTokenKey);
+
+      if (authToken == null) return false;
+
+      final response = await _dio.put(
+        '${Constants.apiBaseUrl}${Constants.notificationSettingsEndpoint}',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+        data: settings,
+      );
+
+      if (response.statusCode == 200) {
+        await prefs.setString(
+          Constants.notificationSettingsKey,
+          jsonEncode(settings),
+        );
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Bildirim ayarları güncelleme hatası: $e');
+      return false;
+    }
   }
 
-  Future<String?> _getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('user_id');
+  // Get notification settings
+  Future<Map<String, dynamic>> getNotificationSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final settingsJson = prefs.getString(Constants.notificationSettingsKey);
+
+      if (settingsJson != null) {
+        return jsonDecode(settingsJson);
+      }
+      return Constants.defaultNotificationSettings;
+    } catch (e) {
+      print('Bildirim ayarları alma hatası: $e');
+      return Constants.defaultNotificationSettings;
+    }
   }
 
-  Future<void> _saveTokenLocally(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fcm_token', token);
+  // Deactivate device token (logout)
+  Future<void> deactivateDeviceToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString(Constants.authTokenKey);
+      final fcmToken = prefs.getString(Constants.fcmTokenKey);
+
+      if (authToken == null || fcmToken == null) return;
+
+      await _dio.post(
+        '${Constants.apiBaseUrl}/api/notifications/deactivate-token',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+        data: {'fcmToken': fcmToken},
+      );
+
+      await prefs.remove(Constants.fcmTokenKey);
+      print('FCM token deaktive edildi');
+    } catch (e) {
+      print('FCM token deaktive etme hatası: $e');
+    }
   }
 
-  Future<void> _clearTokenLocally() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('fcm_token');
+  // Get FCM token
+  Future<String?> getFCMToken() async {
+    try {
+      return await _firebaseMessaging.getToken();
+    } catch (e) {
+      print('FCM token alma hatası: $e');
+      return null;
+    }
+  }
+
+  // Subscribe to topic
+  Future<void> subscribeToTopic(String topic) async {
+    try {
+      await _firebaseMessaging.subscribeToTopic(topic);
+      print('Topic\'e abone olundu: $topic');
+    } catch (e) {
+      print('Topic abonelik hatası: $e');
+    }
+  }
+
+  // Unsubscribe from topic
+  Future<void> unsubscribeFromTopic(String topic) async {
+    try {
+      await _firebaseMessaging.unsubscribeFromTopic(topic);
+      print('Topic aboneliği iptal edildi: $topic');
+    } catch (e) {
+      print('Topic abonelik iptal hatası: $e');
+    }
   }
 }
