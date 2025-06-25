@@ -1,614 +1,480 @@
-// lib/services/notification_service.dart - Eksiksiz ve hatasız versiyon
+// lib/screens/notifications_screen.dart dosyasının sonuna eklenecek NotificationsScreen widget'ı
 
-import 'dart:convert';
-import 'dart:io';
-import 'dart:async';
-import 'dart:typed_data';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:overlay_support/overlay_support.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/notification_model.dart';
 import '../utils/constants.dart';
 
-class NotificationService {
-  static final NotificationService _instance = NotificationService._internal();
-  factory NotificationService() => _instance;
-  NotificationService._internal();
+class NotificationsScreen extends StatefulWidget {
+  const NotificationsScreen({Key? key}) : super(key: key);
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications =
-  FlutterLocalNotificationsPlugin();
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
   final Dio _dio = Dio();
+  List<NotificationModel> _notifications = [];
+  bool _isLoading = true;
+  bool _hasError = false;
+  int _currentPage = 1;
+  final int _limit = 20;
+  bool _hasMoreData = true;
+  bool _isLoadingMore = false;
+  final ScrollController _scrollController = ScrollController();
 
-  BuildContext? _context;
-  Function(NotificationModel)? _onNotificationTapped;
-
-  // Initialize notification service
-  Future<void> initialize(BuildContext context) async {
-    _context = context;
-    await _initializeLocalNotifications();
-    await _initializeFirebaseMessaging();
-    await _requestPermissions();
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+    _scrollController.addListener(_onScroll);
   }
 
-  // Request permissions
-  Future<void> _requestPermissions() async {
-    // Firebase Messaging permissions
-    NotificationSettings settings = await _firebaseMessaging.requestPermission(
-      alert: true,
-      announcement: false,
-      badge: true,
-      carPlay: false,
-      criticalAlert: false,
-      provisional: false,
-      sound: true,
-    );
-
-    print('Kullanıcı izin durumu: ${settings.authorizationStatus}');
-
-    // Android notification permission (API 33+)
-    if (Platform.isAndroid) {
-      final status = await Permission.notification.request();
-      print('Android bildirim izni: $status');
-    }
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  // Local notifications setup
-  Future<void> _initializeLocalNotifications() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    const DarwinInitializationSettings initializationSettingsIOS =
-    DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    const InitializationSettings initializationSettings =
-    InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
-
-    await _localNotifications.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: _onNotificationResponse,
-    );
-
-    // Android notification channels
-    await _createNotificationChannels();
-  }
-
-  // Notification channels oluştur
-  Future<void> _createNotificationChannels() async {
-    if (Platform.isAndroid) {
-      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-
-      if (androidPlugin != null) {
-        // Default channel
-        const AndroidNotificationChannel defaultChannel = AndroidNotificationChannel(
-          'djmobilapp_notifications',
-          'DJ Mobil App Bildirimleri',
-          description: 'DJ Mobil App genel bildirimleri',
-          importance: Importance.high,
-          enableLights: true,
-          enableVibration: true,
-          playSound: true,
-        );
-
-        // Music channel
-        const AndroidNotificationChannel musicChannel = AndroidNotificationChannel(
-          'music_notifications',
-          'Müzik Bildirimleri',
-          description: 'Müzik ile ilgili bildirimler',
-          importance: Importance.high,
-          enableLights: true,
-          enableVibration: true,
-          playSound: true,
-        );
-
-        // Promotion channel
-        const AndroidNotificationChannel promotionChannel = AndroidNotificationChannel(
-          'promotion_notifications',
-          'Promosyon Bildirimleri',
-          description: 'Promosyon ve kampanya bildirimleri',
-          importance: Importance.defaultImportance,
-          enableLights: true,
-          enableVibration: false,
-          playSound: true,
-        );
-
-        await androidPlugin.createNotificationChannel(defaultChannel);
-        await androidPlugin.createNotificationChannel(musicChannel);
-        await androidPlugin.createNotificationChannel(promotionChannel);
+  void _onScroll() {
+    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+      if (!_isLoadingMore && _hasMoreData) {
+        _loadMoreNotifications();
       }
     }
   }
 
-  // Firebase messaging setup
-  Future<void> _initializeFirebaseMessaging() async {
-    // Foreground messages
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+  Future<void> _loadNotifications() async {
+    if (!mounted) return;
 
-    // Background message tapped
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessage);
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
 
-    // App opened from terminated state
-    final initialMessage = await _firebaseMessaging.getInitialMessage();
-    if (initialMessage != null) {
-      Future.delayed(const Duration(seconds: 2), () {
-        _handleBackgroundMessage(initialMessage);
-      });
-    }
-
-    // Register device token
-    await _registerDeviceToken();
-  }
-
-  // Register device token with backend
-  Future<void> _registerDeviceToken() async {
     try {
-      final token = await _firebaseMessaging.getToken();
-      if (token == null) return;
-
       final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString(Constants.userIdKey);
       final authToken = prefs.getString(Constants.authTokenKey);
 
-      if (userId == null || authToken == null) {
-        print('Kullanıcı girişi yapılmamış, token kaydedilemiyor');
+      if (authToken == null) {
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
         return;
       }
 
-      final deviceInfo = await _getDeviceInfo();
-
-      final response = await _dio.post(
-        Constants.fullNotificationRegisterTokenUrl,
+      final response = await _dio.get(
+        '${Constants.apiBaseUrl}/notifications?page=1&limit=$_limit',
         options: Options(
-          headers: Constants.getDefaultHeaders(authToken: authToken),
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
         ),
-        data: {
-          'fcmToken': token,
-          'deviceInfo': deviceInfo,
-          'platform': Platform.isIOS ? 'ios' : 'android',
-          'deviceId': deviceInfo['deviceId'],
-          'deviceModel': deviceInfo['deviceModel'],
-          'osVersion': deviceInfo['osVersion'],
-          'appVersion': deviceInfo['appVersion'],
-        },
       );
 
-      if (response.statusCode == 200) {
-        await prefs.setString(Constants.fcmTokenKey, token);
-        print('FCM token başarıyla kaydedildi');
+      if (response.statusCode == 200 && mounted) {
+        final data = response.data;
+        final notificationsList = data['notifications'] as List<dynamic>? ?? [];
+
+        setState(() {
+          _notifications = notificationsList
+              .map((json) => NotificationModel.fromJson(json))
+              .toList();
+          _hasMoreData = notificationsList.length == _limit;
+          _currentPage = 1;
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      print('FCM token kaydetme hatası: $e');
-    }
-  }
-
-  // Get device information
-  Future<Map<String, dynamic>> _getDeviceInfo() async {
-    final deviceInfo = DeviceInfoPlugin();
-    final packageInfo = await PackageInfo.fromPlatform();
-
-    try {
-      if (Platform.isAndroid) {
-        final androidInfo = await deviceInfo.androidInfo;
-        return {
-          'deviceId': androidInfo.id,
-          'deviceModel': androidInfo.model,
-          'osVersion': androidInfo.version.release,
-          'appVersion': packageInfo.version,
-        };
-      } else if (Platform.isIOS) {
-        final iosInfo = await deviceInfo.iosInfo;
-        return {
-          'deviceId': iosInfo.identifierForVendor ?? 'unknown',
-          'deviceModel': iosInfo.model,
-          'osVersion': iosInfo.systemVersion,
-          'appVersion': packageInfo.version,
-        };
-      }
-      return {
-        'deviceId': 'unknown',
-        'deviceModel': 'unknown',
-        'osVersion': 'unknown',
-        'appVersion': packageInfo.version,
-      };
-    } catch (e) {
-      print('Device info alma hatası: $e');
-      return {
-        'deviceId': 'unknown',
-        'deviceModel': 'unknown',
-        'osVersion': 'unknown',
-        'appVersion': packageInfo.version,
-      };
-    }
-  }
-
-  // Handle foreground messages
-  void _handleForegroundMessage(RemoteMessage message) {
-    print('Foreground bildirim alındı: ${message.messageId}');
-
-    try {
-      final notification = NotificationModel.fromMap(message.data);
-      _showLocalNotification(notification, message);
-
-      // Overlay notification göster
-      if (_context != null) {
-        showOverlayNotification((context) {
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            child: ListTile(
-              leading: Icon(notification.typeIcon),
-              title: Text(notification.title),
-              subtitle: Text(notification.body),
-              trailing: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => OverlaySupportEntry.of(context)?.dismiss(),
-              ),
-              onTap: () {
-                OverlaySupportEntry.of(context)?.dismiss();
-                _handleNotificationTap(message.data);
-              },
-            ),
-          );
-        }, duration: const Duration(seconds: 4));
-      }
-
-    } catch (e) {
-      print('Foreground bildirim işleme hatası: $e');
-    }
-  }
-
-  // Show local notification
-  Future<void> _showLocalNotification(NotificationModel notification, RemoteMessage message) async {
-    final String channelId = _getChannelId(notification.type);
-
-    // Basit Android bildirim oluştur
-    AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      channelId,
-      _getChannelName(notification.type),
-      channelDescription: _getChannelDescription(notification.type),
-      importance: Importance.high,
-      priority: Priority.high,
-      showWhen: true,
-      autoCancel: true,
-      styleInformation: BigTextStyleInformation(
-        notification.body,
-        contentTitle: notification.title,
-        summaryText: 'DJ Mobil App',
-      ),
-      icon: '@mipmap/ic_launcher',
-    );
-
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      notification.title,
-      notification.body,
-      platformDetails,
-      payload: jsonEncode(message.data),
-    );
-  }
-
-  // Channel ID alma
-  String _getChannelId(String type) {
-    switch (type) {
-      case 'music':
-        return 'music_notifications';
-      case 'playlist':
-        return 'music_notifications';
-      case 'promotion':
-        return 'promotion_notifications';
-      default:
-        return 'djmobilapp_notifications';
-    }
-  }
-
-  // Get channel name by type
-  String _getChannelName(String type) {
-    switch (type) {
-      case 'music':
-        return 'Müzik Bildirimleri';
-      case 'playlist':
-        return 'Playlist Bildirimleri';
-      case 'user':
-        return 'Kullanıcı Bildirimleri';
-      case 'promotion':
-        return 'Promosyon Bildirimleri';
-      default:
-        return 'Genel Bildirimler';
-    }
-  }
-
-  // Get channel description by type
-  String _getChannelDescription(String type) {
-    switch (type) {
-      case 'music':
-        return 'Müzik ile ilgili bildirimler';
-      case 'playlist':
-        return 'Playlist ile ilgili bildirimler';
-      case 'user':
-        return 'Kullanıcı etkileşim bildirimleri';
-      case 'promotion':
-        return 'Promosyon ve kampanya bildirimleri';
-      default:
-        return 'Genel uygulama bildirimleri';
-    }
-  }
-
-  // Handle background/terminated message tapped
-  void _handleBackgroundMessage(RemoteMessage message) {
-    print('Background bildirim tıklandı: ${message.messageId}');
-    _handleNotificationTap(message.data);
-  }
-
-  // Handle local notification response
-  void _onNotificationResponse(NotificationResponse response) {
-    print('Local bildirim tıklandı: ${response.payload}');
-    if (response.payload != null) {
-      try {
-        final data = jsonDecode(response.payload!);
-        _handleNotificationTap(data);
-      } catch (e) {
-        print('Payload parse hatası: $e');
+      print('Bildirim yükleme hatası: $e');
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
       }
     }
   }
 
-  // Handle notification tap
-  void _handleNotificationTap(Map<String, dynamic> data) {
-    if (_onNotificationTapped != null) {
-      final notification = NotificationModel.fromMap(data);
-      _onNotificationTapped!(notification);
-    }
+  Future<void> _loadMoreNotifications() async {
+    if (!mounted || _isLoadingMore) return;
 
-    // Navigate based on type
-    _navigateFromNotification(data);
-  }
+    setState(() {
+      _isLoadingMore = true;
+    });
 
-  // Navigate from notification
-  void _navigateFromNotification(Map<String, dynamic> data) {
-    if (_context == null) return;
-
-    final navigator = Navigator.of(_context!);
-    final type = data['type'] ?? 'general';
-    final deepLink = data['deepLink'];
-
-    if (deepLink != null) {
-      // Deep link navigation
-      print('Deep link navigation: $deepLink');
-      // Implement deep link logic here
-    } else {
-      // Default navigation based on type
-      switch (type) {
-        case 'music':
-        // Navigate to music player or track detail
-          break;
-        case 'playlist':
-        // Navigate to playlist
-          break;
-        case 'user':
-        // Navigate to user profile or activity
-          break;
-        case 'promotion':
-        // Navigate to promotion page
-          break;
-        default:
-        // Navigate to notifications screen
-          navigator.pushNamed('/notifications');
-          break;
-      }
-    }
-  }
-
-  // Okunmamış bildirim sayısını al
-  Future<int> getUnreadNotificationCount() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final authToken = prefs.getString(Constants.authTokenKey);
 
-      if (authToken == null) return 0;
+      if (authToken == null) return;
 
       final response = await _dio.get(
-        Constants.fullNotificationUnreadCountUrl,
+        '${Constants.apiBaseUrl}/notifications?page=${_currentPage + 1}&limit=$_limit',
         options: Options(
-          headers: Constants.getDefaultHeaders(authToken: authToken),
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
         ),
       );
 
-      if (response.statusCode == 200) {
-        return response.data['data']['unreadCount'] ?? 0;
+      if (response.statusCode == 200 && mounted) {
+        final data = response.data;
+        final notificationsList = data['notifications'] as List<dynamic>? ?? [];
+
+        setState(() {
+          _notifications.addAll(
+              notificationsList.map((json) => NotificationModel.fromJson(json)).toList()
+          );
+          _hasMoreData = notificationsList.length == _limit;
+          _currentPage++;
+          _isLoadingMore = false;
+        });
       }
-      return 0;
     } catch (e) {
-      print('Okunmamış bildirim sayısı alma hatası: $e');
-      return 0;
+      print('Daha fazla bildirim yükleme hatası: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
     }
   }
 
-  // Bildirimi okundu olarak işaretle
-  Future<bool> markNotificationAsRead(String notificationId) async {
+  Future<void> _markAsRead(String notificationId, int index) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final authToken = prefs.getString(Constants.authTokenKey);
 
-      if (authToken == null) return false;
+      if (authToken == null) return;
 
       final response = await _dio.put(
-        Constants.getFullNotificationMarkReadUrl(notificationId),
+        '${Constants.apiBaseUrl}/notifications/$notificationId/read',
         options: Options(
-          headers: Constants.getDefaultHeaders(authToken: authToken),
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
         ),
       );
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          _notifications[index] = _notifications[index].copyWith(
+            isRead: true,
+            readAt: DateTime.now(),
+          );
+        });
+      }
     } catch (e) {
       print('Bildirim okundu işaretleme hatası: $e');
-      return false;
     }
   }
 
-  // Tüm bildirimleri okundu olarak işaretle
-  Future<bool> markAllNotificationsAsRead() async {
+  Future<void> _markAllAsRead() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final authToken = prefs.getString(Constants.authTokenKey);
 
-      if (authToken == null) return false;
+      if (authToken == null) return;
 
       final response = await _dio.put(
-        Constants.fullNotificationMarkAllReadUrl,
+        '${Constants.apiBaseUrl}/notifications/mark-all-read',
         options: Options(
-          headers: Constants.getDefaultHeaders(authToken: authToken),
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
         ),
       );
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200 && mounted) {
+        setState(() {
+          _notifications = _notifications.map((notification) =>
+              notification.copyWith(
+                isRead: true,
+                readAt: DateTime.now(),
+              )
+          ).toList();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tüm bildirimler okundu olarak işaretlendi'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
       print('Tümünü okundu işaretleme hatası: $e');
-      return false;
-    }
-  }
-
-  // Update notification settings
-  Future<bool> updateNotificationSettings(Map<String, dynamic> settings) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final authToken = prefs.getString(Constants.authTokenKey);
-
-      if (authToken == null) return false;
-
-      final response = await _dio.put(
-        Constants.fullNotificationSettingsUrl,
-        options: Options(
-          headers: Constants.getDefaultHeaders(authToken: authToken),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bir hata oluştu'),
+          backgroundColor: Colors.red,
         ),
-        data: settings,
       );
-
-      if (response.statusCode == 200) {
-        await prefs.setString(
-          Constants.notificationSettingsKey,
-          jsonEncode(settings),
-        );
-        return true;
-      }
-      return false;
-    } catch (e) {
-      print('Bildirim ayarları güncelleme hatası: $e');
-      return false;
     }
   }
 
-  // Get notification settings
-  Future<Map<String, dynamic>> getNotificationSettings() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final settingsJson = prefs.getString(Constants.notificationSettingsKey);
+  void _handleNotificationTap(NotificationModel notification, int index) {
+    // Eğer okunmamışsa okundu olarak işaretle
+    if (!notification.isRead) {
+      _markAsRead(notification.id, index);
+    }
 
-      if (settingsJson != null) {
-        return jsonDecode(settingsJson);
-      }
-      return Constants.defaultNotificationSettings;
-    } catch (e) {
-      print('Bildirim ayarları alma hatası: $e');
-      return Constants.defaultNotificationSettings;
+    // Deep link varsa işle
+    if (notification.deepLink != null && notification.deepLink!.isNotEmpty) {
+      _handleDeepLink(notification.deepLink!);
     }
   }
 
-  // Deactivate device token (logout)
-  Future<void> deactivateDeviceToken() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final authToken = prefs.getString(Constants.authTokenKey);
-      final fcmToken = prefs.getString(Constants.fcmTokenKey);
+  void _handleDeepLink(String deepLink) {
+    // Deep link işleme mantığı
+    // Örneğin: "playlist/123" -> Playlist sayfasına git
+    // "music/456" -> Müzik detay sayfasına git
+    print('Deep link işleniyor: $deepLink');
 
-      if (authToken == null || fcmToken == null) return;
+    // Bu kısım uygulamanıza göre özelleştirilebilir
+    final parts = deepLink.split('/');
+    if (parts.length >= 2) {
+      final type = parts[0];
+      final id = parts[1];
 
-      await _dio.post(
-        Constants.fullNotificationDeactivateTokenUrl,
-        options: Options(
-          headers: Constants.getDefaultHeaders(authToken: authToken),
+      switch (type) {
+        case 'playlist':
+        // Playlist sayfasına navigasyon
+          break;
+        case 'music':
+        // Müzik detay sayfasına navigasyon
+          break;
+        case 'profile':
+        // Profil sayfasına navigasyon
+          break;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        data: {'fcmToken': fcmToken},
+        title: const Text(
+          'Bildirimler',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          if (_notifications.any((notification) => !notification.isRead))
+            TextButton(
+              onPressed: _markAllAsRead,
+              child: const Text(
+                'Tümünü Okundu İşaretle',
+                style: TextStyle(
+                  color: Colors.blue,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+        ),
       );
-
-      await prefs.remove(Constants.fcmTokenKey);
-      print('FCM token deaktive edildi');
-    } catch (e) {
-      print('FCM token deaktive etme hatası: $e');
     }
-  }
 
-  // Get FCM token
-  Future<String?> getFCMToken() async {
-    try {
-      return await _firebaseMessaging.getToken();
-    } catch (e) {
-      print('FCM token alma hatası: $e');
-      return null;
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 60,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Bildirimler yüklenemedi',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Lütfen tekrar deneyin',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadNotifications,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Tekrar Dene'),
+            ),
+          ],
+        ),
+      );
     }
-  }
 
-  // Subscribe to topic
-  Future<void> subscribeToTopic(String topic) async {
-    try {
-      await _firebaseMessaging.subscribeToTopic(topic);
-      print('Topic\'e abone olundu: $topic');
-    } catch (e) {
-      print('Topic abonelik hatası: $e');
+    if (_notifications.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.notifications_none,
+              color: Colors.grey,
+              size: 80,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Henüz bildirim yok',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Yeni bildirimler burada görünecek',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
     }
+
+    return RefreshIndicator(
+      onRefresh: _loadNotifications,
+      color: Colors.blue,
+      backgroundColor: Colors.grey[900],
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: _notifications.length + (_isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _notifications.length) {
+            return const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                ),
+              ),
+            );
+          }
+
+          final notification = _notifications[index];
+          return _buildNotificationItem(notification, index);
+        },
+      ),
+    );
   }
 
-  // Unsubscribe from topic
-  Future<void> unsubscribeFromTopic(String topic) async {
-    try {
-      await _firebaseMessaging.unsubscribeFromTopic(topic);
-      print('Topic aboneliği iptal edildi: $topic');
-    } catch (e) {
-      print('Topic abonelik iptal hatası: $e');
-    }
-  }
-
-  // Bildirim tıklama callback'ini ayarla
-  void setOnNotificationTapped(Function(NotificationModel) callback) {
-    _onNotificationTapped = callback;
-  }
-
-  // Okunmamış bildirim sayısı stream'i (gerçek zamanlı güncelleme için)
-  Stream<int> get unreadCountStream async* {
-    while (true) {
-      yield await getUnreadNotificationCount();
-      await Future.delayed(const Duration(seconds: 30)); // 30 saniyede bir güncelle
-    }
-  }
-
-  // Bildirim dinleyicisini başlat (homepage'de kullanmak için)
-  void startNotificationListener(Function(int) onUnreadCountChanged) {
-    Timer.periodic(const Duration(seconds: 30), (timer) async {
-      final count = await getUnreadNotificationCount();
-      onUnreadCountChanged(count);
-    });
+  Widget _buildNotificationItem(NotificationModel notification, int index) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: notification.isRead ? Colors.grey[900] : Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: notification.isRead ? Colors.grey[800]! : Colors.blue.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: notification.typeColor.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Icon(
+            notification.typeIcon,
+            color: notification.typeColor,
+            size: 20,
+          ),
+        ),
+        title: Text(
+          notification.title,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
+            fontSize: 16,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              notification.body,
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 14,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              notification.timeAgo,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        trailing: !notification.isRead
+            ? Container(
+          width: 8,
+          height: 8,
+          decoration: const BoxDecoration(
+            color: Colors.blue,
+            shape: BoxShape.circle,
+          ),
+        )
+            : null,
+        onTap: () => _handleNotificationTap(notification, index),
+      ),
+    );
   }
 }

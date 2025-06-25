@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:508468914079:android:bf5cc54382077a61d17faa",
+        "mobilesdk_app_id": "1:508468914079:android:a07982a4c71fc7d8d17faa",
         "android_client_info": {
-          "package_name": "com.djmobilapp.android"
+          "package_name": "com.example.djmobilapp"
         }
       },
       "oauth_client": [],
