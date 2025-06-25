@@ -21,7 +21,7 @@ dependencies:
   socket_io_client: ^2.0.3+1
   shared_preferences: ^2.2.2
   image_picker: ^0.8.7+3
-  http: ^0.13.6
+  http: ^1.4.0
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8

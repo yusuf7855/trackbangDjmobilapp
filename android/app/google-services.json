@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "508468914079",
+    "project_id": "djmobilapp",
+    "storage_bucket": "djmobilapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:508468914079:android:bf5cc54382077a61d17faa",
+        "android_client_info": {
+          "package_name": "com.djmobilapp.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOKhT6gipYKAjo43d4nXpxoWrBKDpQZ5w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
