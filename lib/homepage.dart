@@ -1,3 +1,4 @@
+import 'package:djmobilapp/screens/notifications_screen.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -20,11 +21,16 @@ import './hot_page.dart';
 import './login_page.dart';
 import './common_music_player.dart';
 import './top10_music_card.dart';
+import 'package:djmobilapp/screens/notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuPressed;
-
-  const HomeScreen({Key? key, this.onMenuPressed}) : super(key: key);
+  final int unreadNotificationCount; // ✅ YENİ parametreler
+  final VoidCallback? onNotificationPressed;
+  const HomeScreen({Key? key,
+    this.onMenuPressed,
+    this.unreadNotificationCount = 0, // ✅ Default değer
+    this.onNotificationPressed,}) : super(key: key);
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -1424,11 +1430,47 @@ class _HomeScreenState extends State<HomeScreen>
             Spacer(),
 
             // Actions
-            IconButton(
-              icon: Icon(Icons.notifications_none, color: Colors.white),
-              onPressed: () {
-                // Notification action
-              },
+            Stack(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none, color: Colors.white, size: 28),
+                  onPressed: widget.onNotificationPressed ?? () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                // Okunmamış bildirim sayısı badge'i
+                if (widget.unreadNotificationCount > 0)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        widget.unreadNotificationCount > 99
+                            ? '99+'
+                            : widget.unreadNotificationCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             IconButton(
               icon: Icon(Icons.message_outlined, color: Colors.white),

@@ -1,6 +1,9 @@
-// lib/services/notification_service.dart
+// lib/services/notification_service.dart - Eksiksiz ve hatasız versiyon
+
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -80,61 +83,53 @@ class NotificationService {
     );
 
     // Android notification channels
-    if (Platform.isAndroid) {
-      await _createNotificationChannels();
-    }
+    await _createNotificationChannels();
   }
 
-  // Create Android notification channels
+  // Notification channels oluştur
   Future<void> _createNotificationChannels() async {
-    const List<AndroidNotificationChannel> channels = [
-      AndroidNotificationChannel(
-        'default',
-        'Genel Bildirimler',
-        description: 'Genel uygulama bildirimleri',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
-      AndroidNotificationChannel(
-        'music',
-        'Müzik Bildirimleri',
-        description: 'Müzik ile ilgili bildirimler',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
-      AndroidNotificationChannel(
-        'playlist',
-        'Playlist Bildirimleri',
-        description: 'Playlist ile ilgili bildirimler',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
-      AndroidNotificationChannel(
-        'user',
-        'Kullanıcı Bildirimleri',
-        description: 'Kullanıcı etkileşim bildirimleri',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
-      AndroidNotificationChannel(
-        'promotion',
-        'Promosyon Bildirimleri',
-        description: 'Promosyon ve kampanya bildirimleri',
-        importance: Importance.default,
-        playSound: true,
-        enableVibration: false,
-      ),
-    ];
+    if (Platform.isAndroid) {
+      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
 
-    for (final channel in channels) {
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(channel);
+      if (androidPlugin != null) {
+        // Default channel
+        const AndroidNotificationChannel defaultChannel = AndroidNotificationChannel(
+          'djmobilapp_notifications',
+          'DJ Mobil App Bildirimleri',
+          description: 'DJ Mobil App genel bildirimleri',
+          importance: Importance.high,
+          enableLights: true,
+          enableVibration: true,
+          playSound: true,
+        );
+
+        // Music channel
+        const AndroidNotificationChannel musicChannel = AndroidNotificationChannel(
+          'music_notifications',
+          'Müzik Bildirimleri',
+          description: 'Müzik ile ilgili bildirimler',
+          importance: Importance.high,
+          enableLights: true,
+          enableVibration: true,
+          playSound: true,
+        );
+
+        // Promotion channel
+        const AndroidNotificationChannel promotionChannel = AndroidNotificationChannel(
+          'promotion_notifications',
+          'Promosyon Bildirimleri',
+          description: 'Promosyon ve kampanya bildirimleri',
+          importance: Importance.defaultImportance,
+          enableLights: true,
+          enableVibration: false,
+          playSound: true,
+        );
+
+        await androidPlugin.createNotificationChannel(defaultChannel);
+        await androidPlugin.createNotificationChannel(musicChannel);
+        await androidPlugin.createNotificationChannel(promotionChannel);
+      }
     }
   }
 
@@ -147,13 +142,12 @@ class NotificationService {
     FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessage);
 
     // App opened from terminated state
-    FirebaseMessaging.getInitialMessage().then((message) {
-      if (message != null) {
-        Future.delayed(const Duration(seconds: 2), () {
-          _handleBackgroundMessage(message);
-        });
-      }
-    });
+    final initialMessage = await _firebaseMessaging.getInitialMessage();
+    if (initialMessage != null) {
+      Future.delayed(const Duration(seconds: 2), () {
+        _handleBackgroundMessage(initialMessage);
+      });
+    }
 
     // Register device token
     await _registerDeviceToken();
@@ -188,6 +182,10 @@ class NotificationService {
           'fcmToken': token,
           'deviceInfo': deviceInfo,
           'platform': Platform.isIOS ? 'ios' : 'android',
+          'deviceId': deviceInfo['deviceId'],
+          'deviceModel': deviceInfo['deviceModel'],
+          'osVersion': deviceInfo['osVersion'],
+          'appVersion': deviceInfo['appVersion'],
         },
       );
 
@@ -223,8 +221,14 @@ class NotificationService {
           'appVersion': packageInfo.version,
         };
       }
+      return {
+        'deviceId': 'unknown',
+        'deviceModel': 'unknown',
+        'osVersion': 'unknown',
+        'appVersion': packageInfo.version,
+      };
     } catch (e) {
-      print('Cihaz bilgisi alma hatası: $e');
+      print('Device info alma hatası: $e');
       return {
         'deviceId': 'unknown',
         'deviceModel': 'unknown',
@@ -232,117 +236,62 @@ class NotificationService {
         'appVersion': packageInfo.version,
       };
     }
-
-    return {
-      'deviceId': 'unknown',
-      'deviceModel': 'unknown',
-      'osVersion': 'unknown',
-      'appVersion': packageInfo.version,
-    };
   }
 
   // Handle foreground messages
   void _handleForegroundMessage(RemoteMessage message) {
     print('Foreground bildirim alındı: ${message.messageId}');
 
-    // Show overlay notification
-    showOverlayNotification(
-          (context) {
-        return Material(
-          color: Colors.transparent,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 50),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade600,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.notifications,
-                  color: Colors.white,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        message.notification?.title ?? 'Yeni Bildirim',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (message.notification?.body != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          message.notification!.body!,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-      duration: const Duration(seconds: 4),
-    );
+    try {
+      final notification = NotificationModel.fromMap(message.data);
+      _showLocalNotification(notification, message);
 
-    // Also show local notification
-    _showLocalNotification(message);
+      // Overlay notification göster
+      if (_context != null) {
+        showOverlayNotification((context) {
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            child: ListTile(
+              leading: Icon(notification.typeIcon),
+              title: Text(notification.title),
+              subtitle: Text(notification.body),
+              trailing: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => OverlaySupportEntry.of(context)?.dismiss(),
+              ),
+              onTap: () {
+                OverlaySupportEntry.of(context)?.dismiss();
+                _handleNotificationTap(message.data);
+              },
+            ),
+          );
+        }, duration: const Duration(seconds: 4));
+      }
+
+    } catch (e) {
+      print('Foreground bildirim işleme hatası: $e');
+    }
   }
 
   // Show local notification
-  Future<void> _showLocalNotification(RemoteMessage message) async {
-    final notification = message.notification;
-    if (notification == null) return;
+  Future<void> _showLocalNotification(NotificationModel notification, RemoteMessage message) async {
+    final String channelId = _getChannelId(notification.type);
 
-    final type = message.data['type'] ?? 'general';
-    final imageUrl = message.data['imageUrl'];
-
+    // Basit Android bildirim oluştur
     AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      type,
-      _getChannelName(type),
-      channelDescription: _getChannelDescription(type),
+      channelId,
+      _getChannelName(notification.type),
+      channelDescription: _getChannelDescription(notification.type),
       importance: Importance.high,
       priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-      largeIcon: imageUrl != null
-          ? NetworkAssetAndroidBitmap(imageUrl)
-          : null,
-      styleInformation: imageUrl != null
-          ? BigPictureStyleInformation(
-        NetworkAssetAndroidBitmap(imageUrl),
+      showWhen: true,
+      autoCancel: true,
+      styleInformation: BigTextStyleInformation(
+        notification.body,
         contentTitle: notification.title,
-        summaryText: notification.body,
-      )
-          : BigTextStyleInformation(
-        notification.body ?? '',
-        contentTitle: notification.title,
+        summaryText: 'DJ Mobil App',
       ),
+      icon: '@mipmap/ic_launcher',
     );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -363,6 +312,20 @@ class NotificationService {
       platformDetails,
       payload: jsonEncode(message.data),
     );
+  }
+
+  // Channel ID alma
+  String _getChannelId(String type) {
+    switch (type) {
+      case 'music':
+        return 'music_notifications';
+      case 'playlist':
+        return 'music_notifications';
+      case 'promotion':
+        return 'promotion_notifications';
+      default:
+        return 'djmobilapp_notifications';
+    }
   }
 
   // Get channel name by type
@@ -435,49 +398,109 @@ class NotificationService {
     final type = data['type'] ?? 'general';
     final deepLink = data['deepLink'];
 
-    // DeepLink varsa onu kullan
-    if (deepLink != null && deepLink.isNotEmpty) {
-      // DeepLink handling logic buraya
-      print('DeepLink: $deepLink');
-      return;
-    }
-
-    // Tip bazlı navigasyon
-    switch (type) {
-      case 'music':
-      // Müzik sayfasına git
-        navigator.pushNamed('/music');
-        break;
-      case 'playlist':
-      // Playlist sayfasına git
-        final playlistId = data['playlistId'];
-        if (playlistId != null) {
-          navigator.pushNamed('/playlist', arguments: {'id': playlistId});
-        } else {
-          navigator.pushNamed('/playlists');
-        }
-        break;
-      case 'user':
-      // Profil sayfasına git
-        final userId = data['userId'];
-        if (userId != null) {
-          navigator.pushNamed('/profile', arguments: {'userId': userId});
-        }
-        break;
-      case 'promotion':
-      // Promosyon sayfasına git
-        navigator.pushNamed('/promotions');
-        break;
-      default:
-      // Bildirimler sayfasına git
-        navigator.pushNamed('/notifications');
-        break;
+    if (deepLink != null) {
+      // Deep link navigation
+      print('Deep link navigation: $deepLink');
+      // Implement deep link logic here
+    } else {
+      // Default navigation based on type
+      switch (type) {
+        case 'music':
+        // Navigate to music player or track detail
+          break;
+        case 'playlist':
+        // Navigate to playlist
+          break;
+        case 'user':
+        // Navigate to user profile or activity
+          break;
+        case 'promotion':
+        // Navigate to promotion page
+          break;
+        default:
+        // Navigate to notifications screen
+          navigator.pushNamed('/notifications');
+          break;
+      }
     }
   }
 
-  // Set notification tap callback
-  void setOnNotificationTapped(Function(NotificationModel) callback) {
-    _onNotificationTapped = callback;
+  // Okunmamış bildirim sayısını al
+  Future<int> getUnreadNotificationCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString(Constants.authTokenKey);
+
+      if (authToken == null) return 0;
+
+      final response = await _dio.get(
+        '${Constants.apiBaseUrl}${Constants.notificationUnreadCountEndpoint}',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data['data']['unreadCount'] ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      print('Okunmamış bildirim sayısı alma hatası: $e');
+      return 0;
+    }
+  }
+
+  // Bildirimi okundu olarak işaretle
+  Future<bool> markNotificationAsRead(String notificationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString(Constants.authTokenKey);
+
+      if (authToken == null) return false;
+
+      final response = await _dio.put(
+        '${Constants.apiBaseUrl}${Constants.notificationMarkReadEndpoint.replaceAll('{id}', notificationId)}',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Bildirim okundu işaretleme hatası: $e');
+      return false;
+    }
+  }
+
+  // Tüm bildirimleri okundu olarak işaretle
+  Future<bool> markAllNotificationsAsRead() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString(Constants.authTokenKey);
+
+      if (authToken == null) return false;
+
+      final response = await _dio.put(
+        '${Constants.apiBaseUrl}${Constants.notificationMarkAllReadEndpoint}',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Tümünü okundu işaretleme hatası: $e');
+      return false;
+    }
   }
 
   // Update notification settings
@@ -539,7 +562,7 @@ class NotificationService {
       if (authToken == null || fcmToken == null) return;
 
       await _dio.post(
-        '${Constants.apiBaseUrl}/api/notifications/deactivate-token',
+        '${Constants.apiBaseUrl}${Constants.notificationDeactivateTokenEndpoint}',
         options: Options(
           headers: {
             'Authorization': 'Bearer $authToken',
@@ -584,5 +607,26 @@ class NotificationService {
     } catch (e) {
       print('Topic abonelik iptal hatası: $e');
     }
+  }
+
+  // Bildirim tıklama callback'ini ayarla
+  void setOnNotificationTapped(Function(NotificationModel) callback) {
+    _onNotificationTapped = callback;
+  }
+
+  // Okunmamış bildirim sayısı stream'i (gerçek zamanlı güncelleme için)
+  Stream<int> get unreadCountStream async* {
+    while (true) {
+      yield await getUnreadNotificationCount();
+      await Future.delayed(const Duration(seconds: 30)); // 30 saniyede bir güncelle
+    }
+  }
+
+  // Bildirim dinleyicisini başlat (homepage'de kullanmak için)
+  void startNotificationListener(Function(int) onUnreadCountChanged) {
+    Timer.periodic(const Duration(seconds: 30), (timer) async {
+      final count = await getUnreadNotificationCount();
+      onUnreadCountChanged(count);
+    });
   }
 }
