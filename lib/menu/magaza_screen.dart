@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:async';
 import '../url_constants.dart';
@@ -1215,14 +1216,68 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Simulated API call - replace with actual implementation
-      await Future.delayed(Duration(seconds: 2));
+      // SharedPreferences'dan auth token al
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString('auth_token');
 
-      _showMessage('İlan başarıyla oluşturuldu!');
-      widget.onListingCreated();
-      Navigator.pop(context);
+      if (authToken == null) {
+        _showMessage('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
+        return;
+      }
+
+      // FormData oluştur (resimler için)
+      FormData formData = FormData.fromMap({
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'category': _selectedCategory,
+        'price': _priceController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+      });
+
+      // Resimleri ekle
+      for (int i = 0; i < _selectedImages.length; i++) {
+        String fileName = _selectedImages[i].path.split('/').last;
+        formData.files.add(MapEntry(
+          'images',
+          await MultipartFile.fromFile(
+            _selectedImages[i].path,
+            filename: fileName,
+          ),
+        ));
+      }
+
+      // API çağrısı yap
+      final response = await _dio.post(
+        'http://localhost:5000/api/store/listings', // Backend URL'ini ayarla
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
+      if (response.statusCode == 201 && response.data['success'] == true) {
+        _showMessage('İlan başarıyla oluşturuldu!');
+        widget.onListingCreated(); // Sayfa yenilemesi için
+        Navigator.pop(context);
+      } else {
+        _showMessage(response.data['message'] ?? 'İlan oluşturulamadı');
+      }
+
     } catch (e) {
-      _showMessage('İlan oluşturulurken hata oluştu: $e');
+      if (e is DioException) {
+        if (e.response?.statusCode == 403) {
+          _showMessage('İlan hakkınız bulunmuyor. Lütfen ilan hakkı satın alın.');
+        } else if (e.response?.statusCode == 401) {
+          _showMessage('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
+        } else {
+          _showMessage(e.response?.data['message'] ?? 'İlan oluşturulurken hata oluştu');
+        }
+      } else {
+        _showMessage('Bağlantı hatası: $e');
+      }
     } finally {
       setState(() => _isLoading = false);
     }
