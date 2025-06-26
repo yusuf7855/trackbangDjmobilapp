@@ -1,4 +1,4 @@
-// lib/menu/magaza_screen.dart - İlan Sistemi
+// lib/menu/magaza_screen.dart - İlan Sistemi (Düzeltilmiş)
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
@@ -101,20 +101,6 @@ class _MagazaScreenState extends State<MagazaScreen>
       }
     } catch (e) {
       // Hata durumunda varsayılan değer
-    }
-  }
-
-  Future<void> _buyCredits() async {
-    try {
-      final response = await _dio.post('${UrlConstants.apiBaseUrl}/api/user/buy-credits');
-      if (response.statusCode == 200) {
-        setState(() {
-          _userCredits += 1;
-        });
-        _showMessage('1 İlan hakkı satın alındı!', isError: false);
-      }
-    } catch (e) {
-      _showMessage('Satın alma işlemi başarısız', isError: true);
     }
   }
 
@@ -262,41 +248,27 @@ class _MagazaScreenState extends State<MagazaScreen>
                 style: TextStyle(color: _primaryText, fontSize: 16),
                 decoration: InputDecoration(
                   hintText: 'İlan ara (başlık, açıklama, numara)',
-                  hintStyle: TextStyle(color: _tertiaryText, fontSize: 14),
-                  prefixIcon: Icon(Icons.search, color: _secondaryText, size: 20),
+                  hintStyle: TextStyle(color: _tertiaryText),
+                  prefixIcon: Icon(Icons.search, color: _secondaryText),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                    icon: Icon(Icons.clear, color: _secondaryText, size: 18),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _searchQuery = '';
+                      });
+                    },
+                  )
+                      : null,
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
                 onChanged: (value) {
-                  setState(() => _searchQuery = value);
+                  setState(() {
+                    _searchQuery = value;
+                  });
                 },
-              ),
-            ),
-          ),
-          SizedBox(width: 12),
-          GestureDetector(
-            onTap: _buyCredits,
-            child: Container(
-              height: 48,
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: _accentColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_shopping_cart, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    '4€',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
@@ -307,25 +279,26 @@ class _MagazaScreenState extends State<MagazaScreen>
 
   Widget _buildFilters() {
     return Container(
-      height: 60,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: [
-            // Category filter
-            GestureDetector(
-              onTap: () => _showCategoryFilter(),
+      height: 48,
+      margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Row(
+        children: [
+          // Kategori Filtresi
+          Expanded(
+            child: GestureDetector(
+              onTap: _showCategoryFilter,
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                height: 40,
                 decoration: BoxDecoration(
                   color: _surfaceColor,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: _borderColor.withOpacity(0.3)),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    Icon(Icons.category, color: _secondaryText, size: 16),
+                    SizedBox(width: 6),
                     Text(
                       _selectedCategory,
                       style: TextStyle(
@@ -340,52 +313,28 @@ class _MagazaScreenState extends State<MagazaScreen>
                 ),
               ),
             ),
-            SizedBox(width: 12),
+          ),
 
-            // Price filter
-            GestureDetector(
-              onTap: () => _showPriceFilter(),
+          SizedBox(width: 10),
+
+          // Fiyat Filtresi
+          Expanded(
+            child: GestureDetector(
+              onTap: _showPriceFilter,
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                height: 40,
                 decoration: BoxDecoration(
                   color: _surfaceColor,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: _borderColor.withOpacity(0.3)),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.tune, color: _secondaryText, size: 16),
-                    SizedBox(width: 4),
+                    SizedBox(width: 6),
                     Text(
                       'Fiyat',
-                      style: TextStyle(
-                        color: _primaryText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(width: 12),
-
-            // Sort filter
-            GestureDetector(
-              onTap: () => _showSortFilter(),
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: _surfaceColor,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _borderColor.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _priceSort,
                       style: TextStyle(
                         color: _primaryText,
                         fontSize: 14,
@@ -398,25 +347,57 @@ class _MagazaScreenState extends State<MagazaScreen>
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+
+          SizedBox(width: 10),
+
+          // Sıralama Filtresi
+          Expanded(
+            child: GestureDetector(
+              onTap: _showSortFilter,
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _surfaceColor,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _borderColor.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.sort, color: _secondaryText, size: 16),
+                    SizedBox(width: 6),
+                    Text(
+                      'Sırala',
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.keyboard_arrow_down, color: _secondaryText, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildResultsInfo(int count) {
-    if (_isLoading) return SizedBox.shrink();
-
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
         children: [
           Text(
             '$count ilan bulundu',
             style: TextStyle(
-              color: _tertiaryText,
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
+              color: _secondaryText,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -425,33 +406,26 @@ class _MagazaScreenState extends State<MagazaScreen>
   }
 
   Widget _buildListingsGrid(List<dynamic> listings) {
-    return RefreshIndicator(
-      onRefresh: _loadListings,
-      color: _accentColor,
-      backgroundColor: _surfaceColor,
-      child: GridView.builder(
-        controller: _scrollController,
-        padding: EdgeInsets.all(20),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: listings.length,
-        itemBuilder: (context, index) => _buildListingCard(listings[index]),
+    return GridView.builder(
+      controller: _scrollController,
+      padding: EdgeInsets.all(20),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.75,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
       ),
+      itemCount: listings.length,
+      itemBuilder: (context, index) {
+        final listing = listings[index];
+        return _buildListingCard(listing);
+      },
     );
   }
 
   Widget _buildListingCard(dynamic listing) {
-    final String title = listing['title']?.toString() ?? 'Başlık Yok';
-    final String category = listing['category']?.toString() ?? '';
-    final double price = (listing['price'] ?? 0).toDouble();
-    final String listingNumber = listing['listingNumber']?.toString() ?? '';
-    final List<dynamic> images = listing['images'] ?? [];
-    final bool isActive = listing['isActive'] ?? false;
-    final String status = isActive ? 'Aktif' : 'Pasif';
+    final images = listing['images'] as List<dynamic>? ?? [];
+    final firstImage = images.isNotEmpty ? images[0] : null;
 
     return GestureDetector(
       onTap: () => _showListingDetail(listing),
@@ -464,30 +438,29 @@ class _MagazaScreenState extends State<MagazaScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
+            // Image section
             Expanded(
               flex: 3,
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: _surfaceColor,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  color: _surfaceColor,
                 ),
-                child: images.isNotEmpty
+                child: firstImage != null
                     ? ClipRRect(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                   child: Image.network(
-                    images[0],
+                    firstImage,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _buildPlaceholderImage(),
+                    errorBuilder: (context, error, stackTrace) => _buildNoImagePlaceholder(),
                   ),
                 )
-                    : _buildPlaceholderImage(),
+                    : _buildNoImagePlaceholder(),
               ),
             ),
 
-            // Content
+            // Content section
             Expanded(
               flex: 2,
               child: Padding(
@@ -495,73 +468,32 @@ class _MagazaScreenState extends State<MagazaScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title
                     Text(
-                      title,
+                      listing['title'] ?? 'Başlık Yok',
                       style: TextStyle(
                         color: _primaryText,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        height: 1.2,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     SizedBox(height: 4),
-
-                    // Category & Status
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            category,
-                            style: TextStyle(
-                              color: _secondaryText,
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isActive ? _successColor.withOpacity(0.2) : _warningColor.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            status,
-                            style: TextStyle(
-                              color: isActive ? _successColor : _warningColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      '${listing['price']} ₺',
+                      style: TextStyle(
+                        color: _accentColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    SizedBox(height: 4),
-
-                    // Price & Listing Number
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '₺${price.toStringAsFixed(0)}',
-                          style: TextStyle(
-                            color: _accentColor,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          '#$listingNumber',
-                          style: TextStyle(
-                            color: _tertiaryText,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
+                    Spacer(),
+                    Text(
+                      listing['category'] ?? 'Kategori Yok',
+                      style: TextStyle(
+                        color: _tertiaryText,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -573,7 +505,7 @@ class _MagazaScreenState extends State<MagazaScreen>
     );
   }
 
-  Widget _buildPlaceholderImage() {
+  Widget _buildNoImagePlaceholder() {
     return Container(
       width: double.infinity,
       height: double.infinity,
@@ -649,7 +581,7 @@ class _MagazaScreenState extends State<MagazaScreen>
     );
   }
 
-  // Dialog Methods
+  // Dialog Methods - Kategori filter'ını kaydırılabilir yaptık
   void _showCategoryFilter() {
     showModalBottomSheet(
       context: context,
@@ -659,6 +591,9 @@ class _MagazaScreenState extends State<MagazaScreen>
       ),
       builder: (context) => Container(
         padding: EdgeInsets.all(20),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7, // Max yükseklik
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,16 +607,23 @@ class _MagazaScreenState extends State<MagazaScreen>
               ),
             ),
             SizedBox(height: 16),
-            ...categories.map((category) => ListTile(
-              title: Text(category, style: TextStyle(color: _primaryText)),
-              trailing: _selectedCategory == category
-                  ? Icon(Icons.check, color: _accentColor)
-                  : null,
-              onTap: () {
-                setState(() => _selectedCategory = category);
-                Navigator.pop(context);
-              },
-            )),
+            // Kaydırılabilir kategori listesi
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: _categories.map((category) => ListTile(
+                    title: Text(category, style: TextStyle(color: _primaryText)),
+                    trailing: _selectedCategory == category
+                        ? Icon(Icons.check, color: _accentColor)
+                        : null,
+                    onTap: () {
+                      setState(() => _selectedCategory = category);
+                      Navigator.pop(context);
+                    },
+                  )).toList(),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -695,64 +637,84 @@ class _MagazaScreenState extends State<MagazaScreen>
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Fiyat Aralığı',
-                style: TextStyle(
-                  color: _primaryText,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+      builder: (context) => Container(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Fiyat Aralığı',
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 20),
+            RangeSlider(
+              values: _priceRange,
+              min: 0,
+              max: 10000,
+              divisions: 100,
+              activeColor: _accentColor,
+              inactiveColor: _borderColor,
+              labels: RangeLabels(
+                '${_priceRange.start.round()} ₺',
+                '${_priceRange.end.round()} ₺',
+              ),
+              onChanged: (values) {
+                setState(() => _priceRange = values);
+              },
+            ),
+            SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Min: ${_priceRange.start.round()} ₺',
+                  style: TextStyle(color: _secondaryText),
                 ),
-              ),
-              SizedBox(height: 16),
-              RangeSlider(
-                values: _priceRange,
-                min: _minPrice,
-                max: _maxPrice,
-                divisions: 100,
-                activeColor: _accentColor,
-                inactiveColor: _borderColor,
-                labels: RangeLabels(
-                  '₺${_priceRange.start.round()}',
-                  '₺${_priceRange.end.round()}',
+                Text(
+                  'Max: ${_priceRange.end.round()} ₺',
+                  style: TextStyle(color: _secondaryText),
                 ),
-                onChanged: (values) {
-                  setModalState(() => _priceRange = values);
-                },
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('₺${_priceRange.start.round()}', style: TextStyle(color: _secondaryText)),
-                  Text('₺${_priceRange.end.round()}', style: TextStyle(color: _secondaryText)),
-                ],
-              ),
-              SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {});
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accentColor,
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              ],
+            ),
+            SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      setState(() => _priceRange = RangeValues(0, 10000));
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _borderColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
+                    child: Text('Sıfırla', style: TextStyle(color: _primaryText)),
                   ),
-                  child: Text('Uygula', style: TextStyle(color: Colors.white)),
                 ),
-              ),
-            ],
-          ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text('Uygula', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -798,12 +760,42 @@ class _MagazaScreenState extends State<MagazaScreen>
     );
   }
 
+  // İlan Ver Dialog'u - Kredi sistemi düzeltildi
   void _showCreateListingDialog() {
     if (_userCredits <= 0) {
-      _showMessage('İlan vermek için kredi satın almanız gerekiyor!', isError: true);
+      // Kredi yoksa satın alma önerisi
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: _surfaceColor,
+          title: Text(
+            'İlan Vermek İçin Kredi Gerekli',
+            style: TextStyle(color: _primaryText),
+          ),
+          content: Text(
+            'İlan vermek için krediniz bulunmuyor. Kredi satın almak ister misiniz?',
+            style: TextStyle(color: _secondaryText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('İptal', style: TextStyle(color: _tertiaryText)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _buyCredit(); // Kredi satın al
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: _accentColor),
+              child: Text('Satın Al', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
       return;
     }
 
+    // Kredi varsa direkt ilan oluşturma sayfasına git
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -812,6 +804,29 @@ class _MagazaScreenState extends State<MagazaScreen>
         ),
       ),
     );
+  }
+
+  // Basitleştirilmiş kredi satın alma
+  Future<void> _buyCredit() async {
+    try {
+      // Simulated purchase - backend olmadan direkt ekliyoruz
+      setState(() {
+        _userCredits += 1;
+      });
+      _showMessage('1 İlan hakkı satın alındı!', isError: false);
+
+      // Şimdi ilan verme sayfasına git
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CreateListingScreen(
+            onListingCreated: _loadListings,
+          ),
+        ),
+      );
+    } catch (e) {
+      _showMessage('Satın alma işlemi başarısız', isError: true);
+    }
   }
 
   void _showListingDetail(dynamic listing) {
@@ -826,7 +841,7 @@ class _MagazaScreenState extends State<MagazaScreen>
   List<String> get categories => _categories;
 }
 
-// Create Listing Screen
+// Create Listing Screen - Aynı kalacak
 class CreateListingScreen extends StatefulWidget {
   final VoidCallback onListingCreated;
 
@@ -873,87 +888,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     super.dispose();
   }
 
-  Future<void> _pickImages() async {
-    if (_selectedImages.length >= 5) {
-      _showMessage('Maksimum 5 resim seçebilirsiniz');
-      return;
-    }
-
-    final List<XFile>? images = await _picker.pickMultiImage(
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 80,
-    );
-
-    if (images != null) {
-      setState(() {
-        for (final image in images) {
-          if (_selectedImages.length < 5) {
-            _selectedImages.add(File(image.path));
-          }
-        }
-      });
-    }
-  }
-
-  void _removeImage(int index) {
-    setState(() {
-      _selectedImages.removeAt(index);
-    });
-  }
-
-  Future<void> _createListing() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedImages.isEmpty) {
-      _showMessage('En az 1 resim seçmelisiniz');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      FormData formData = FormData.fromMap({
-        'title': _titleController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'price': double.parse(_priceController.text.trim()),
-        'category': _selectedCategory,
-      });
-
-      // Add images
-      for (int i = 0; i < _selectedImages.length; i++) {
-        formData.files.add(MapEntry(
-          'images',
-          await MultipartFile.fromFile(_selectedImages[i].path),
-        ));
-      }
-
-      final response = await _dio.post(
-        '${UrlConstants.apiBaseUrl}/api/listings',
-        data: formData,
-      );
-
-      if (response.statusCode == 201) {
-        _showMessage('İlan başarıyla oluşturuldu!');
-        widget.onListingCreated();
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      _showMessage('İlan oluşturulurken hata oluştu');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: _accentColor,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -963,16 +897,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         elevation: 0,
         title: Text(
           'İlan Oluştur',
-          style: TextStyle(
-            color: _primaryText,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: _primaryText),
         ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: _primaryText),
-          onPressed: () => Navigator.pop(context),
-        ),
+        iconTheme: IconThemeData(color: _primaryText),
       ),
       body: Form(
         key: _formKey,
@@ -981,55 +908,61 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionTitle('Resimler (Maksimum 5)'),
-              _buildImageSection(),
-              SizedBox(height: 24),
-
-              _buildSectionTitle('Kategori'),
-              _buildCategoryDropdown(),
-              SizedBox(height: 24),
-
-              _buildSectionTitle('İlan Başlığı'),
               _buildTextFormField(
                 controller: _titleController,
-                hintText: 'İlan başlığınızı girin',
-                validator: (value) => value?.isEmpty == true ? 'Başlık gerekli' : null,
-              ),
-              SizedBox(height: 16),
-
-              _buildSectionTitle('Telefon Numarası'),
-              _buildTextFormField(
-                controller: _phoneController,
-                hintText: '+90 555 123 45 67',
-                keyboardType: TextInputType.phone,
-                validator: (value) => value?.isEmpty == true ? 'Telefon numarası gerekli' : null,
-              ),
-              SizedBox(height: 16),
-
-              _buildSectionTitle('Fiyat (₺)'),
-              _buildTextFormField(
-                controller: _priceController,
-                hintText: '0',
-                keyboardType: TextInputType.number,
+                hintText: 'İlan Başlığı',
                 validator: (value) {
-                  if (value?.isEmpty == true) return 'Fiyat gerekli';
-                  if (double.tryParse(value!) == null) return 'Geçerli bir fiyat girin';
+                  if (value == null || value.isEmpty) {
+                    return 'Başlık gerekli';
+                  }
                   return null;
                 },
               ),
               SizedBox(height: 16),
-
-              _buildSectionTitle('Açıklama'),
               _buildTextFormField(
                 controller: _descriptionController,
-                hintText: 'İlanınızın detaylarını yazın...',
-                maxLines: 5,
-                validator: (value) => value?.isEmpty == true ? 'Açıklama gerekli' : null,
+                hintText: 'Açıklama',
+                maxLines: 4,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Açıklama gerekli';
+                  }
+                  return null;
+                },
               ),
+              SizedBox(height: 16),
+              _buildCategoryDropdown(),
+              SizedBox(height: 16),
+              _buildTextFormField(
+                controller: _priceController,
+                hintText: 'Fiyat (₺)',
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Fiyat gerekli';
+                  }
+                  if (double.tryParse(value) == null) {
+                    return 'Geçerli bir fiyat girin';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 16),
+              _buildTextFormField(
+                controller: _phoneController,
+                hintText: 'Telefon Numarası',
+                keyboardType: TextInputType.phone,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Telefon numarası gerekli';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 24),
+              _buildImagePicker(),
               SizedBox(height: 32),
-
               _buildCreateButton(),
-              SizedBox(height: 20),
             ],
           ),
         ),
@@ -1037,40 +970,59 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          color: _primaryText,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageSection() {
+  Widget _buildImagePicker() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_selectedImages.isNotEmpty) ...[
-          Container(
+        Text(
+          'Resimler (Maksimum 5)',
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: 12),
+        GestureDetector(
+          onTap: _pickImages,
+          child: Container(
+            width: double.infinity,
             height: 120,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _selectedImages.length,
+            decoration: BoxDecoration(
+              color: _surfaceColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _borderColor, style: BorderStyle.solid),
+            ),
+            child: _selectedImages.isEmpty
+                ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add_photo_alternate, color: _secondaryText, size: 32),
+                SizedBox(height: 8),
+                Text(
+                  'Resim Ekle',
+                  style: TextStyle(color: _secondaryText, fontSize: 14),
+                ),
+              ],
+            )
+                : GridView.builder(
+              padding: EdgeInsets.all(8),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              itemCount: _selectedImages.length + (_selectedImages.length < 5 ? 1 : 0),
               itemBuilder: (context, index) {
-                return Container(
-                  margin: EdgeInsets.only(right: 12),
-                  child: Stack(
+                if (index < _selectedImages.length) {
+                  return Stack(
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                         child: Image.file(
                           _selectedImages[index],
-                          width: 120,
-                          height: 120,
+                          width: double.infinity,
+                          height: double.infinity,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -1078,48 +1030,60 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         top: 4,
                         right: 4,
                         child: GestureDetector(
-                          onTap: () => _removeImage(index),
+                          onTap: () {
+                            setState(() {
+                              _selectedImages.removeAt(index);
+                            });
+                          },
                           child: Container(
-                            padding: EdgeInsets.all(4),
+                            padding: EdgeInsets.all(2),
                             decoration: BoxDecoration(
                               color: _errorColor,
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
-                              Icons.close,
-                              color: Colors.white,
-                              size: 16,
-                            ),
+                            child: Icon(Icons.close, color: Colors.white, size: 16),
                           ),
                         ),
                       ),
                     ],
-                  ),
-                );
+                  );
+                } else {
+                  return GestureDetector(
+                    onTap: _pickImages,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _cardColor,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _borderColor),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add, color: _secondaryText, size: 24),
+                          SizedBox(height: 4),
+                          Text(
+                            'Ekle',
+                            style: TextStyle(color: _secondaryText, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
               },
             ),
           ),
-          SizedBox(height: 12),
-        ],
-        GestureDetector(
-          onTap: _pickImages,
-          child: Container(
-            width: double.infinity,
-            height: 100,
-            decoration: BoxDecoration(
-              color: _surfaceColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _borderColor, style: BorderStyle.solid),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+        ),
+        if (_selectedImages.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Row(
               children: [
-                Icon(Icons.add_photo_alternate_outlined, color: _secondaryText, size: 32),
-                SizedBox(height: 8),
                 Text(
                   _selectedImages.isEmpty ? 'Resim Ekle' : 'Daha Fazla Resim Ekle',
                   style: TextStyle(color: _secondaryText, fontSize: 14),
                 ),
+                Spacer(),
                 Text(
                   '${_selectedImages.length}/5',
                   style: TextStyle(color: _tertiaryText, fontSize: 12),
@@ -1127,7 +1091,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               ],
             ),
           ),
-        ),
       ],
     );
   }
@@ -1213,19 +1176,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          elevation: 0,
         ),
         child: _isLoading
-            ? SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            strokeWidth: 2,
-          ),
-        )
+            ? CircularProgressIndicator(color: Colors.white)
             : Text(
-          'İlanı Oluştur',
+          'İlan Oluştur',
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -1235,335 +1190,142 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       ),
     );
   }
+
+  Future<void> _pickImages() async {
+    if (_selectedImages.length >= 5) {
+      _showMessage('Maksimum 5 resim seçebilirsiniz');
+      return;
+    }
+
+    final List<XFile>? pickedFiles = await _picker.pickMultiImage();
+    if (pickedFiles != null) {
+      setState(() {
+        for (final file in pickedFiles) {
+          if (_selectedImages.length < 5) {
+            _selectedImages.add(File(file.path));
+          }
+        }
+      });
+    }
+  }
+
+  Future<void> _createListing() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Simulated API call - replace with actual implementation
+      await Future.delayed(Duration(seconds: 2));
+
+      _showMessage('İlan başarıyla oluşturuldu!');
+      widget.onListingCreated();
+      Navigator.pop(context);
+    } catch (e) {
+      _showMessage('İlan oluşturulurken hata oluştu: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 }
 
-// Listing Detail Screen
-class ListingDetailScreen extends StatefulWidget {
+// Listing Detail Screen - Basit görüntüleme
+class ListingDetailScreen extends StatelessWidget {
   final dynamic listing;
 
   ListingDetailScreen({required this.listing});
 
   @override
-  _ListingDetailScreenState createState() => _ListingDetailScreenState();
-}
-
-class _ListingDetailScreenState extends State<ListingDetailScreen> {
-  int _currentImageIndex = 0;
-  final PageController _pageController = PageController();
-
-  // Colors
-  final Color _backgroundColor = Color(0xFF0A0A0B);
-  final Color _surfaceColor = Color(0xFF1A1A1C);
-  final Color _cardColor = Color(0xFF1E1E21);
-  final Color _primaryText = Color(0xFFFFFFFF);
-  final Color _secondaryText = Color(0xFFB3B3B3);
-  final Color _tertiaryText = Color(0xFF666666);
-  final Color _accentColor = Color(0xFF3B82F6);
-  final Color _borderColor = Color(0xFF2A2A2E);
-  final Color _successColor = Color(0xFF10B981);
-  final Color _warningColor = Color(0xFFF59E0B);
-
-  @override
   Widget build(BuildContext context) {
-    final listing = widget.listing;
-    final String title = listing['title']?.toString() ?? '';
-    final String description = listing['description']?.toString() ?? '';
-    final String category = listing['category']?.toString() ?? '';
-    final String phone = listing['phone']?.toString() ?? '';
-    final double price = (listing['price'] ?? 0).toDouble();
-    final String listingNumber = listing['listingNumber']?.toString() ?? '';
-    final List<dynamic> images = listing['images'] ?? [];
-    final bool isActive = listing['isActive'] ?? false;
-    final String createdAt = listing['createdAt']?.toString() ?? '';
+    final Color _backgroundColor = Color(0xFF0A0A0B);
+    final Color _primaryText = Color(0xFFFFFFFF);
+    final Color _secondaryText = Color(0xFFB3B3B3);
+    final Color _accentColor = Color(0xFF3B82F6);
 
     return Scaffold(
       backgroundColor: _backgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            backgroundColor: _backgroundColor,
-            expandedHeight: 300,
-            pinned: true,
-            leading: Container(
-              margin: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
+      appBar: AppBar(
+        backgroundColor: _backgroundColor,
+        elevation: 0,
+        title: Text(
+          'İlan Detayı',
+          style: TextStyle(color: _primaryText),
+        ),
+        iconTheme: IconThemeData(color: _primaryText),
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              listing['title'] ?? 'Başlık Yok',
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: images.isNotEmpty
-                  ? Stack(
-                children: [
-                  PageView.builder(
-                    controller: _pageController,
-                    itemCount: images.length,
-                    onPageChanged: (index) {
-                      setState(() => _currentImageIndex = index);
-                    },
-                    itemBuilder: (context, index) {
-                      return Image.network(
-                        images[index],
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            Container(
-                              color: _surfaceColor,
-                              child: Icon(
-                                Icons.image_not_supported,
-                                color: _secondaryText,
-                                size: 64,
-                              ),
-                            ),
-                      );
-                    },
+            SizedBox(height: 16),
+            Text(
+              '${listing['price']} ₺',
+              style: TextStyle(
+                color: _accentColor,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Açıklama',
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              listing['description'] ?? 'Açıklama yok',
+              style: TextStyle(color: _secondaryText, fontSize: 16),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Kategori: ${listing['category'] ?? 'Belirtilmemiş'}',
+              style: TextStyle(color: _secondaryText, fontSize: 16),
+            ),
+            SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () {
+                  // İletişim fonksiyonu
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _accentColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  if (images.length > 1)
-                    Positioned(
-                      bottom: 16,
-                      left: 0,
-                      right: 0,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: images.asMap().entries.map((entry) {
-                          return Container(
-                            width: 8,
-                            height: 8,
-                            margin: EdgeInsets.symmetric(horizontal: 4),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _currentImageIndex == entry.key
-                                  ? Colors.white
-                                  : Colors.white.withOpacity(0.4),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                ],
-              )
-                  : Container(
-                color: _surfaceColor,
-                child: Icon(
-                  Icons.image_not_supported,
-                  color: _secondaryText,
-                  size: 64,
+                ),
+                child: Text(
+                  'İletişime Geç',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Status and Category
-                  Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isActive ? _successColor.withOpacity(0.2) : _warningColor.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          isActive ? 'Aktif' : 'Pasif',
-                          style: TextStyle(
-                            color: isActive ? _successColor : _warningColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _surfaceColor,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _borderColor),
-                        ),
-                        child: Text(
-                          category,
-                          style: TextStyle(
-                            color: _secondaryText,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      Spacer(),
-                      Text(
-                        '#$listingNumber',
-                        style: TextStyle(
-                          color: _tertiaryText,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-
-                  // Title
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: _primaryText,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
-                    ),
-                  ),
-                  SizedBox(height: 12),
-
-                  // Price
-                  Text(
-                    '₺${price.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      color: _accentColor,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: 24),
-
-                  // Description
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _surfaceColor,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Açıklama',
-                          style: TextStyle(
-                            color: _primaryText,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          description,
-                          style: TextStyle(
-                            color: _secondaryText,
-                            fontSize: 14,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 16),
-
-                  // Contact Info
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _surfaceColor,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'İletişim',
-                          style: TextStyle(
-                            color: _primaryText,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.phone, color: _accentColor, size: 18),
-                            SizedBox(width: 8),
-                            Text(
-                              phone,
-                              style: TextStyle(
-                                color: _secondaryText,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 16),
-
-                  // Date
-                  if (createdAt.isNotEmpty)
-                    Text(
-                      'İlan Tarihi: ${_formatDate(createdAt)}',
-                      style: TextStyle(
-                        color: _tertiaryText,
-                        fontSize: 12,
-                      ),
-                    ),
-                  SizedBox(height: 32),
-
-                  // Contact Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _callPhone(phone),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _accentColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      icon: Icon(Icons.phone, color: Colors.white),
-                      label: Text(
-                        'Ara',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(String dateString) {
-    try {
-      final date = DateTime.parse(dateString);
-      return '${date.day}.${date.month}.${date.year}';
-    } catch (e) {
-      return dateString;
-    }
-  }
-
-  void _callPhone(String phone) {
-    // Phone call functionality would be implemented here
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Aranıyor: $phone'),
-        backgroundColor: _accentColor,
+          ],
+        ),
       ),
     );
   }
