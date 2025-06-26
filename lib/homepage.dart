@@ -22,6 +22,8 @@ import './login_page.dart';
 import './common_music_player.dart';
 import './top10_music_card.dart';
 import 'package:djmobilapp/screens/notifications_screen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:dio/dio.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuPressed;
@@ -439,6 +441,8 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // Homepage'inizde _buildTop10Tab() metodunu şu şekilde güncelleyin:
+
   Widget _buildTop10Tab() {
     // Show loading animation if still loading
     if (isLoadingTop10 || !_allTop10WebViewsLoaded) {
@@ -447,17 +451,19 @@ class _HomeScreenState extends State<HomeScreen>
 
     final categories = [
       {'key': 'all', 'title': 'Trackbang Top 10'},
-      {'key': 'afrohouse', 'title': 'Afro House'},
-      {'key': 'indiedance', 'title': 'Indie Dance'},
-      {'key': 'organichouse', 'title': 'Organic House'},
-      {'key': 'downtempo', 'title': 'Down Tempo'},
-      {'key': 'melodichouse', 'title': 'Melodic House'},
+      {'key': 'afrohouse', 'title': 'Afro House Top 10'},
+      {'key': 'indiedance', 'title': 'Indie Dance Top 10'},
+      {'key': 'organichouse', 'title': 'Organic House Top 10'},
+      {'key': 'downtempo', 'title': 'Down Tempo Top 10'},
+      {'key': 'melodichouse', 'title': 'Melodic House Top 10'},
     ];
 
     return CustomScrollView(
       slivers: [
+        // DEBUG: Basit FCM Test Butonları
+
         SliverToBoxAdapter(
-          child: SizedBox(height: 0), // 16'dan 8'e düşürüldü
+          child: SizedBox(height: 0),
         ),
         SliverList(
           delegate: SliverChildBuilderDelegate(
@@ -739,7 +745,7 @@ class _HomeScreenState extends State<HomeScreen>
                   const SizedBox(width: 3),
                   Flexible(
                     child: Text(
-                      'Playliste Ekle',
+                      'Ekle',
                       style: TextStyle(
                         color: Colors.blue,
                         fontSize: 9,

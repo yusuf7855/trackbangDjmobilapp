@@ -510,7 +510,7 @@ class _CommonMusicPlayerState extends State<CommonMusicPlayer> with AutomaticKee
                   const SizedBox(width: 3),
                   Flexible(
                     child: Text(
-                      'Playliste Ekle',
+                      'Ekle',
                       style: TextStyle(
                         color: Colors.blue,
                         fontSize: 9,

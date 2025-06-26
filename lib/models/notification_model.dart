@@ -1,4 +1,5 @@
-// lib/models/notification_model.dart
+// lib/models/notification_model.dart - Backend response'a uygun düzeltilmiş versiyon
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -31,27 +32,25 @@ class NotificationModel {
     this.actions = const [],
   });
 
+  // ✅ Backend response'a uygun fromJson
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     return NotificationModel(
-      id: json['_id']?.toString() ?? '',
+      id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       body: json['body']?.toString() ?? '',
       type: json['type']?.toString() ?? 'general',
       imageUrl: json['imageUrl']?.toString(),
       deepLink: json['deepLink']?.toString(),
       data: Map<String, dynamic>.from(json['data'] ?? {}),
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
-      readAt: json['readAt'] != null
-          ? DateTime.tryParse(json['readAt'].toString())
-          : null,
+      createdAt: _parseDateTime(json['createdAt']),
+      readAt: json['readAt'] != null ? _parseDateTime(json['readAt']) : null,
       isRead: json['isRead'] ?? false,
       status: json['status']?.toString() ?? 'sent',
-      actions: (json['actions'] as List<dynamic>?)
-          ?.map((action) => NotificationAction.fromJson(action))
-          .toList() ?? [],
+      actions: _parseActions(json['actions']),
     );
   }
 
+  // Firebase message için fromMap
   factory NotificationModel.fromMap(Map<String, dynamic> map) {
     return NotificationModel(
       id: map['notificationId']?.toString() ?? map['id']?.toString() ?? '',
@@ -61,34 +60,49 @@ class NotificationModel {
       imageUrl: map['imageUrl']?.toString(),
       deepLink: map['deepLink']?.toString(),
       data: Map<String, dynamic>.from(map['data'] ?? map),
-      createdAt: DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
-      readAt: map['readAt'] != null
-          ? DateTime.tryParse(map['readAt'].toString())
-          : null,
+      createdAt: _parseDateTime(map['timestamp'] ?? map['createdAt']),
+      readAt: map['readAt'] != null ? _parseDateTime(map['readAt']) : null,
       isRead: map['isRead'] ?? false,
       status: map['status']?.toString() ?? 'sent',
-      actions: (map['actions'] != null)
-          ? (map['actions'] is String)
-          ? _parseActionsFromString(map['actions'])
-          : (map['actions'] as List<dynamic>)
-          .map((action) => NotificationAction.fromJson(action))
-          .toList()
-          : [],
+      actions: _parseActions(map['actions']),
     );
   }
 
-  static List<NotificationAction> _parseActionsFromString(String actionsString) {
+  // ✅ Improved date parsing
+  static DateTime _parseDateTime(dynamic dateValue) {
+    if (dateValue == null) return DateTime.now();
+
+    if (dateValue is DateTime) return dateValue;
+
     try {
-      final List<dynamic> actionsList =
-      (actionsString.isNotEmpty) ?
-      (actionsString.startsWith('[') ?
-      (actionsString as dynamic) : []) : [];
-      return actionsList
-          .map((action) => NotificationAction.fromJson(action))
-          .toList();
+      return DateTime.parse(dateValue.toString());
     } catch (e) {
-      return [];
+      print('Date parsing error: $e for value: $dateValue');
+      return DateTime.now();
     }
+  }
+
+  // ✅ Improved actions parsing
+  static List<NotificationAction> _parseActions(dynamic actionsValue) {
+    if (actionsValue == null) return [];
+
+    try {
+      if (actionsValue is String) {
+        if (actionsValue.isEmpty) return [];
+        final decoded = actionsValue.startsWith('[') ? actionsValue : '[]';
+        return (decoded as List<dynamic>)
+            .map((action) => NotificationAction.fromJson(action))
+            .toList();
+      } else if (actionsValue is List) {
+        return actionsValue
+            .map((action) => NotificationAction.fromJson(action))
+            .toList();
+      }
+    } catch (e) {
+      print('Actions parsing error: $e');
+    }
+
+    return [];
   }
 
   Map<String, dynamic> toJson() {

@@ -2,14 +2,22 @@ import 'package:djmobilapp/profile.dart';
 import 'package:djmobilapp/register_page.dart';
 import 'package:djmobilapp/search_screen.dart';
 import 'package:djmobilapp/hot_page.dart';
-import 'package:djmobilapp/menu/listeler_screen.dart'; // YENİ IMPORT EKLENDİ
-import 'package:djmobilapp/menu/sample_bank_screen.dart'; // YENİ IMPORT EKLENDİ
-import 'package:djmobilapp/menu/mostening_screen.dart'; // YENİ IMPORT EKLENDİ
-import 'package:djmobilapp/menu/magaza_screen.dart'; // YENİ IMPORT EKLENDİ
-import 'package:djmobilapp/menu/biz_kimiz_screen.dart'; // YENİ IMPORT EKLENDİ
+import 'package:djmobilapp/menu/listeler_screen.dart';
+import 'package:djmobilapp/menu/sample_bank_screen.dart';
+import 'package:djmobilapp/menu/mostening_screen.dart';
+import 'package:djmobilapp/menu/magaza_screen.dart';
+import 'package:djmobilapp/menu/biz_kimiz_screen.dart';
+import 'package:djmobilapp/screens/notifications_screen.dart'; // ✅ EKLENDİ
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// ✅ Firebase ve bildirim import'ları
+import 'package:firebase_core/firebase_core.dart';
+import './firebase_options.dart';
+import './services/notification_permission_service.dart';
+import 'package:dio/dio.dart';
+
 import 'freepage.dart';
 import 'homepage.dart';
 import 'login_page.dart';
@@ -40,6 +48,17 @@ class LoadingProvider extends ChangeNotifier {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ✅ Firebase'i başlat
+  print('🔥 Firebase başlatılıyor...');
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('✅ Firebase başarıyla başlatıldı!');
+  } catch (e) {
+    print('❌ Firebase başlatma hatası: $e');
+  }
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => LoadingProvider(),
@@ -65,6 +84,7 @@ class MyApp extends StatelessWidget {
         '/register': (context) => RegisterPage(),
         '/home': (context) => MainHomePage(),
         '/profile': (context) => ProfileScreen(),
+        '/notifications': (context) => NotificationsScreen(), // ✅ EKLENDİ
       },
       theme: ThemeData(
         primarySwatch: Colors.indigo,
@@ -87,6 +107,7 @@ class MainHomePage extends StatefulWidget {
 class _MainHomePageState extends State<MainHomePage> {
   int _currentIndex = 0;
   String? userId;
+  int unreadNotificationCount = 0;
 
   // Scaffold key'i drawer kontrolü için
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -97,16 +118,38 @@ class _MainHomePageState extends State<MainHomePage> {
   void initState() {
     super.initState();
     _loadUserId();
+    _initializePages();
 
-    // HomeScreen'e drawer'ı açma fonksiyonunu geçiyoruz
+    // ✅ Bildirim izni kontrolü
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkNotificationPermission();
+    });
+
+    debugPrint('MainHomePage initialized');
+  }
+
+  // ✅ EKLENDİ: Pages initialization metodu
+  void _initializePages() {
     _pages = [
-      HomeScreen(onMenuPressed: _openDrawer),
+      HomeScreen(
+        onMenuPressed: _openDrawer,
+        unreadNotificationCount: unreadNotificationCount,
+        onNotificationPressed: _handleNotificationPressed, // ✅ DÜZELTİLDİ
+      ),
       SearchPage(),
       MyBangsScreen(),
       ProfileScreen(),
     ];
+  }
 
-    debugPrint('MainHomePage initialized');
+  // ✅ EKLENDİ: Bildirim izni kontrol metodu
+  void _checkNotificationPermission() async {
+    // 2 saniye bekle ki uygulama tam yüklensin
+    await Future.delayed(Duration(seconds: 2));
+
+    if (mounted) {
+      await NotificationPermissionService.checkAndRequestPermission(context);
+    }
   }
 
   Future<void> _loadUserId() async {
@@ -119,6 +162,17 @@ class _MainHomePageState extends State<MainHomePage> {
   // Drawer'ı açma fonksiyonu
   void _openDrawer() {
     _scaffoldKey.currentState?.openDrawer();
+  }
+
+  // ✅ DÜZELTİLDİ: Bildirim basma işlevi - NotificationsScreen'e yönlendir
+  void _handleNotificationPressed() {
+    print('📱 Bildirim butonuna basıldı - Bildirimler sayfasına yönlendiriliyor');
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const NotificationsScreen(),
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -145,10 +199,10 @@ class _MainHomePageState extends State<MainHomePage> {
         return true;
       },
       child: Scaffold(
-        key: _scaffoldKey, // Scaffold key eklendi
+        key: _scaffoldKey,
         backgroundColor: Colors.black,
         appBar: _buildAppBar(),
-        drawer: _currentIndex == 0 ? _buildDrawer() : null, // Sadece ana sayfada drawer göster
+        drawer: _currentIndex == 0 ? _buildDrawer() : null,
         body: IndexedStack(
           index: _currentIndex,
           children: _pages,
@@ -186,7 +240,7 @@ class _MainHomePageState extends State<MainHomePage> {
         },
       ),
       actions: [
-        if (_currentIndex == 3) // Only show logout on profile page
+        if (_currentIndex == 3)
           IconButton(
             icon: Icon(Icons.logout, color: Colors.white),
             onPressed: _logout,
@@ -195,7 +249,6 @@ class _MainHomePageState extends State<MainHomePage> {
     );
   }
 
-  // DÜZELTİLEN DRAWER
   Widget _buildDrawer() {
     return Drawer(
       backgroundColor: Colors.black,
@@ -212,12 +265,11 @@ class _MainHomePageState extends State<MainHomePage> {
               fit: BoxFit.contain,
             ),
           ),
-          // DÜZELTİLEN KISIM: Tüm navigation işlemleri eklendi
           _buildDrawerItem(
             icon: Icons.list,
             title: 'Listeler',
             onTap: () {
-              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => ListelerScreen()),
@@ -226,9 +278,9 @@ class _MainHomePageState extends State<MainHomePage> {
           ),
           _buildDrawerItem(
             icon: Icons.library_music,
-            title: 'Samplebank',
+            title: 'Sample Bank',
             onTap: () {
-              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => SampleBankScreen()),
@@ -239,7 +291,7 @@ class _MainHomePageState extends State<MainHomePage> {
             icon: Icons.headset,
             title: 'Mostening',
             onTap: () {
-              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => MosteningScreen()),
@@ -250,7 +302,7 @@ class _MainHomePageState extends State<MainHomePage> {
             icon: Icons.store,
             title: 'Mağaza',
             onTap: () {
-              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => MagazaScreen()),
@@ -261,14 +313,37 @@ class _MainHomePageState extends State<MainHomePage> {
             icon: Icons.info,
             title: 'Biz Kimiz',
             onTap: () {
-              Navigator.pop(context); // Drawer'ı kapat
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => BizKimizScreen()),
               );
             },
           ),
+          // ✅ EKLENDİ: Bildirimler menü öğesi
+          _buildDrawerItem(
+            icon: Icons.notifications,
+            title: 'Bildirimler',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+              );
+            },
+          ),
           Divider(color: Colors.grey[700]),
+
+          // ✅ FCM Test Butonları (Debug için)
+          _buildDrawerItem(
+            icon: Icons.bug_report,
+            title: '🧪 FCM Debug Test',
+            onTap: () async {
+              Navigator.pop(context);
+              await _performFCMDebugTest();
+            },
+          ),
+
           _buildDrawerItem(
             icon: Icons.logout,
             title: 'Çıkış Yap',
@@ -280,6 +355,58 @@ class _MainHomePageState extends State<MainHomePage> {
         ],
       ),
     );
+  }
+
+  // ✅ FCM Debug Test Metodu
+  Future<void> _performFCMDebugTest() async {
+    try {
+      print('🧪 Drawer FCM Test başlıyor...');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('FCM Test başlatıldı - Console\'u kontrol edin'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+
+      // NotificationPermissionService'i kullanarak test yap
+      final isGranted = await NotificationPermissionService.isPermissionGranted();
+      print('📋 İzin durumu: $isGranted');
+
+      if (!isGranted) {
+        final granted = await NotificationPermissionService.requestPermissionManually(context);
+        if (granted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Bildirim izni verildi'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Bildirim izni reddedildi'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Bildirim izni zaten verilmiş'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ FCM Debug Test hatası: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('FCM Test hatası: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildDrawerItem({
