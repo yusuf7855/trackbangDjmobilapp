@@ -1,4 +1,4 @@
-// lib/menu/magaza_screen.dart - YENİLENMİŞ VERSİYON
+// lib/menu/magaza_screen.dart - FINAL VERSION
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -29,14 +29,14 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
     'Spor', 'Kitap', 'Oyun', 'Müzik Aleti', 'Diğer'
   ];
 
-  // Modern Dark Theme Colors - Mavi renk kullanılmıyor
+  // Modern Dark Theme Colors
   final Color _backgroundColor = Color(0xFF0F0F0F);
   final Color _surfaceColor = Color(0xFF1A1A1A);
   final Color _cardColor = Color(0xFF262626);
   final Color _primaryText = Color(0xFFFFFFFF);
   final Color _secondaryText = Color(0xFFBBBBBB);
   final Color _tertiaryText = Color(0xFF888888);
-  final Color _accentColor = Color(0xFF6B7280); // Gri ton
+  final Color _accentColor = Color(0xFF6B7280);
   final Color _borderColor = Color(0xFF333333);
 
   @override
@@ -56,9 +56,33 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _backgroundColor,
+      appBar: AppBar(
+        title: Text('Mağaza', style: TextStyle(color: _primaryText)),
+        backgroundColor: _backgroundColor,
+        elevation: 0,
+        iconTheme: IconThemeData(color: _primaryText),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Row(
+              children: [
+                Icon(Icons.account_balance_wallet, color: _accentColor, size: 20),
+                SizedBox(width: 4),
+                Text(
+                  '$_userCredits',
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
       body: CustomScrollView(
         slivers: [
-          _buildSliverAppBar(),
           SliverToBoxAdapter(
             child: _buildSearchAndFilters(),
           ),
@@ -81,65 +105,6 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
         backgroundColor: _accentColor,
         child: Icon(Icons.add, color: _primaryText),
       ),
-    );
-  }
-
-  Widget _buildSliverAppBar() {
-    return SliverAppBar(
-      expandedHeight: 120,
-      floating: false,
-      pinned: true,
-      backgroundColor: _backgroundColor,
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      flexibleSpace: FlexibleSpaceBar(
-        title: Text(
-          'Mağaza',
-          style: TextStyle(
-            color: _primaryText,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                _backgroundColor,
-                _backgroundColor.withOpacity(0.8),
-              ],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        Container(
-          margin: EdgeInsets.only(right: 16),
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: _cardColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _borderColor),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.account_balance_wallet, color: _secondaryText, size: 16),
-              SizedBox(width: 4),
-              Text(
-                '$_userCredits',
-                style: TextStyle(
-                  color: _primaryText,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -195,6 +160,7 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
               ),
             ],
           ),
+
         ],
       ),
     );
@@ -226,7 +192,6 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
     );
   }
 
-  // ANA SAYFA - TEK SÜTUN LİSTESİ
   Widget _buildListingsGrid() {
     final filteredListings = _getFilteredListings();
 
@@ -265,50 +230,106 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
     );
   }
 
-  // TEK İLAN KARTI - YATAY DÜZENLEMe
   Widget _buildListingCard(dynamic listing) {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: _backgroundColor, // İlan kartı arka planı sayfa ile aynı
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderColor, width: 1),
-      ),
       child: InkWell(
         onTap: () => _openListingDetail(listing),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // SOL TARAF - GÖRSEL
-              _buildListingImage(listing),
-              SizedBox(width: 16),
-              // SAĞ TARAF - BİLGİLER
-              Expanded(
-                child: _buildListingInfo(listing),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // SOL TARAF - GÖRSEL
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: _cardColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _borderColor),
               ),
-            ],
-          ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _getFirstImage(listing),
+              ),
+            ),
+            SizedBox(width: 16),
+            // SAĞ TARAF - BİLGİLER
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Başlık
+                  Text(
+                    listing['title']?.toString() ?? 'Başlık yok',
+                    style: TextStyle(
+                      color: _primaryText,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: 8),
+                  // Kategori
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _cardColor,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: _borderColor),
+                    ),
+                    child: Text(
+                      listing['category']?.toString() ?? 'Kategori',
+                      style: TextStyle(
+                        color: _secondaryText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  // Fiyat ve tarih
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '₺${listing['price']?.toString() ?? '0'}',
+                        style: TextStyle(
+                          color: _primaryText,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        _formatDate(listing['createdAt']),
+                        style: TextStyle(
+                          color: _tertiaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  // Telefon numarası
+                  if (listing['phoneNumber'] != null)
+                    Row(
+                      children: [
+                        Icon(Icons.phone, size: 16, color: _secondaryText),
+                        SizedBox(width: 4),
+                        Text(
+                          listing['phoneNumber'].toString(),
+                          style: TextStyle(
+                            color: _secondaryText,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  // İLAN GÖRSELİ - TEK GÖRSEL
-  Widget _buildListingImage(dynamic listing) {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        color: _cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderColor),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: _getFirstImage(listing),
       ),
     );
   }
@@ -348,77 +369,6 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
         color: _tertiaryText,
         size: 32,
       ),
-    );
-  }
-
-  // İLAN BİLGİLERİ
-  Widget _buildListingInfo(dynamic listing) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Başlık
-        Text(
-          listing['title']?.toString() ?? 'Başlık yok',
-          style: TextStyle(
-            color: _primaryText,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        SizedBox(height: 8),
-        // Kategori
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: _cardColor,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: _borderColor),
-          ),
-          child: Text(
-            listing['category']?.toString() ?? 'Kategori',
-            style: TextStyle(
-              color: _secondaryText,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        SizedBox(height: 8),
-        // Açıklama
-        Text(
-          listing['description']?.toString() ?? 'Açıklama yok',
-          style: TextStyle(
-            color: _secondaryText,
-            fontSize: 14,
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        SizedBox(height: 12),
-        // Fiyat ve tarih
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '₺${listing['price']?.toString() ?? '0'}',
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              _formatDate(listing['createdAt']),
-              style: TextStyle(
-                color: _tertiaryText,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -519,7 +469,6 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   }
 }
 
-// DETAY SAYFASI - MODERN TASARIM VE CAROUSEL
 class ListingDetailScreen extends StatefulWidget {
   final dynamic listing;
 
@@ -546,16 +495,21 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _backgroundColor,
+      appBar: AppBar(
+        title: Text('İlan Detayı', style: TextStyle(color: _primaryText)),
+        backgroundColor: _backgroundColor,
+        elevation: 0,
+        iconTheme: IconThemeData(color: _primaryText),
+      ),
       body: CustomScrollView(
         slivers: [
-          _buildSliverAppBar(),
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildImageCarousel(), // Carousel sadece detay sayfasında
+                  _buildImageCarousel(),
                   SizedBox(height: 24),
                   _buildTitleAndPrice(),
                   SizedBox(height: 20),
@@ -574,30 +528,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
   }
 
-  Widget _buildSliverAppBar() {
-    return SliverAppBar(
-      expandedHeight: 0,
-      floating: false,
-      pinned: true,
-      backgroundColor: _backgroundColor,
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      leading: IconButton(
-        icon: Icon(Icons.arrow_back, color: _primaryText),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text(
-        'İlan Detayı',
-        style: TextStyle(
-          color: _primaryText,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  // CAROUSEL - SADECE DETAY SAYFASINDA
   Widget _buildImageCarousel() {
     List<String> imageUrls = _getImageUrls();
 
@@ -655,7 +585,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               );
             },
           ),
-          // Görsel sayacı
           if (imageUrls.length > 1)
             Positioned(
               top: 16,
@@ -676,7 +605,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 ),
               ),
             ),
-          // Nokta göstergeleri
           if (imageUrls.length > 1)
             Positioned(
               bottom: 16,
@@ -844,7 +772,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             ),
           ),
           SizedBox(height: 12),
-          if (widget.listing['phone'] != null)
+          if (widget.listing['phoneNumber'] != null)
             Container(
               width: double.infinity,
               padding: EdgeInsets.all(16),
@@ -858,7 +786,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   Icon(Icons.phone, color: _accentColor, size: 20),
                   SizedBox(width: 12),
                   Text(
-                    widget.listing['phone'].toString(),
+                    widget.listing['phoneNumber'].toString(),
                     style: TextStyle(
                       color: _primaryText,
                       fontSize: 16,
@@ -884,7 +812,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 }
 
-// İLAN OLUŞTURMA SAYFASI
 class CreateListingScreen extends StatefulWidget {
   final VoidCallback onListingCreated;
 
@@ -1235,7 +1162,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         'description': _descriptionController.text,
         'category': _selectedCategory,
         'price': _priceController.text,
-        'phone': _phoneController.text,
+        'phoneNumber': _phoneController.text,
       });
 
       // Görselleri ekle
@@ -1309,4 +1236,4 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _priceController.dispose();
     super.dispose();
   }
-  }
+}
