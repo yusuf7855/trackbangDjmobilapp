@@ -209,6 +209,29 @@ class _MagazaScreenState extends State<MagazaScreen> {
   }
 
   Widget _buildListingCard(dynamic listing) {
+    // Resim URL'sini kontrol et
+    String? imageUrl;
+
+    // images bir dizi mi kontrol et
+    if (listing['images'] is List && listing['images'].isNotEmpty) {
+      // İlk resmi al
+      final firstImage = listing['images'][0];
+
+      // Eğer resim bir Map ise 'url' anahtarını kontrol et
+      if (firstImage is Map) {
+        imageUrl = firstImage['url']?.toString();
+      }
+      // Eğer direkt bir String ise
+      else if (firstImage is String) {
+        imageUrl = firstImage;
+      }
+    }
+
+    // Eğer URL relative ise base URL ekle
+    if (imageUrl != null && !imageUrl.startsWith('http')) {
+      imageUrl = '${UrlConstants.apiBaseUrl}$imageUrl';
+    }
+
     return Card(
       color: _cardColor,
       margin: EdgeInsets.only(bottom: 16),
@@ -226,8 +249,16 @@ class _MagazaScreenState extends State<MagazaScreen> {
                 decoration: BoxDecoration(
                   color: _surfaceColor,
                   borderRadius: BorderRadius.circular(8),
+                  image: imageUrl != null
+                      ? DecorationImage(
+                    image: NetworkImage(imageUrl),
+                    fit: BoxFit.cover,
+                  )
+                      : null,
                 ),
-                child: Icon(Icons.image, color: _tertiaryText, size: 32),
+                child: imageUrl == null
+                    ? Icon(Icons.image, color: _tertiaryText, size: 32)
+                    : null,
               ),
               SizedBox(width: 16),
               Expanded(
@@ -235,7 +266,7 @@ class _MagazaScreenState extends State<MagazaScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      listing['title'] ?? 'Başlık Yok',
+                      listing['title']?.toString() ?? 'Başlık Yok',
                       style: TextStyle(
                         color: _primaryText,
                         fontSize: 16,
@@ -246,7 +277,7 @@ class _MagazaScreenState extends State<MagazaScreen> {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      '${listing['price']} ₺',
+                      '${listing['price']?.toString() ?? '0'} ₺',
                       style: TextStyle(
                         color: _accentColor,
                         fontSize: 18,
@@ -255,7 +286,7 @@ class _MagazaScreenState extends State<MagazaScreen> {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      listing['category'] ?? 'Kategori Yok',
+                      listing['category']?.toString() ?? 'Kategori Yok',
                       style: TextStyle(color: _tertiaryText, fontSize: 12),
                     ),
                   ],
@@ -1041,6 +1072,20 @@ class ListingDetailScreen extends StatelessWidget {
     final Color _secondaryText = Color(0xFFB3B3B3);
     final Color _accentColor = Color(0xFF3B82F6);
 
+    // Resim URL'lerini işle
+    List<String> imageUrls = [];
+
+    if (listing['images'] is List) {
+      for (var image in listing['images']) {
+        if (image is Map && image['url'] != null) {
+          final url = image['url'].toString();
+          imageUrls.add(url.startsWith('http') ? url : '${UrlConstants.apiBaseUrl}$url');
+        } else if (image is String) {
+          imageUrls.add(image.startsWith('http') ? image : '${UrlConstants.apiBaseUrl}$image');
+        }
+      }
+    }
+
     return Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
@@ -1057,8 +1102,35 @@ class ListingDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (imageUrls.isNotEmpty)
+              SizedBox(
+                height: 250,
+                child: PageView.builder(
+                  itemCount: imageUrls.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          imageUrls[index],
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[800],
+                              child: Icon(Icons.broken_image,
+                                  color: Colors.grey, size: 50),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            SizedBox(height: 20),
             Text(
-              listing['title'] ?? 'Başlık Yok',
+              listing['title']?.toString() ?? 'Başlık Yok',
               style: TextStyle(
                 color: _primaryText,
                 fontSize: 24,
@@ -1067,7 +1139,7 @@ class ListingDetailScreen extends StatelessWidget {
             ),
             SizedBox(height: 16),
             Text(
-              '${listing['price']} ₺',
+              '${listing['price']?.toString() ?? '0'} ₺',
               style: TextStyle(
                 color: _accentColor,
                 fontSize: 28,
@@ -1085,19 +1157,26 @@ class ListingDetailScreen extends StatelessWidget {
             ),
             SizedBox(height: 8),
             Text(
-              listing['description'] ?? 'Açıklama yok',
+              listing['description']?.toString() ?? 'Açıklama yok',
               style: TextStyle(color: _secondaryText, fontSize: 16),
             ),
             SizedBox(height: 16),
             Text(
-              'Kategori: ${listing['category'] ?? 'Kategori Yok'}',
+              'Kategori: ${listing['category']?.toString() ?? 'Kategori Yok'}',
               style: TextStyle(color: _secondaryText, fontSize: 14),
             ),
             SizedBox(height: 8),
             Text(
-              'İlan No: ${listing['listingNumber'] ?? 'N/A'}',
+              'İlan No: ${listing['listingNumber']?.toString() ?? 'N/A'}',
               style: TextStyle(color: _secondaryText, fontSize: 14),
             ),
+            if (listing['phoneNumber'] != null) ...[
+              SizedBox(height: 16),
+              Text(
+                'İletişim: ${listing['phoneNumber']}',
+                style: TextStyle(color: _secondaryText, fontSize: 16),
+              ),
+            ],
           ],
         ),
       ),
