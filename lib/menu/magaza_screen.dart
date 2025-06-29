@@ -1,4 +1,4 @@
-// lib/menu/magaza_screen.dart - DÜZELTİLMİŞ VERSİYON
+// lib/menu/magaza_screen.dart - TEMİZ VE DÜZELTİLMİŞ VERSİYON
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -12,7 +12,7 @@ class MagazaScreen extends StatefulWidget {
   _MagazaScreenState createState() => _MagazaScreenState();
 }
 
-class _MagazaScreenState extends State<MagazaScreen> {
+class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMixin {
   final Dio _dio = Dio();
   final TextEditingController _searchController = TextEditingController();
 
@@ -23,18 +23,21 @@ class _MagazaScreenState extends State<MagazaScreen> {
   String _searchQuery = '';
   String _selectedCategory = 'Tümü';
   String _priceSort = 'Yeniden Eskiye';
-  RangeValues _priceRange = RangeValues(0, 10000);
 
-  final List<String> _categories = ['Tümü', 'Elektronik', 'Giyim', 'Ev & Yaşam', 'Spor', 'Kitap', 'Oyun', 'Müzik Aleti', 'Diğer'];
+  final List<String> _categories = [
+    'Tümü', 'Elektronik', 'Giyim', 'Ev & Yaşam',
+    'Spor', 'Kitap', 'Oyun', 'Müzik Aleti', 'Diğer'
+  ];
 
-  // Colors
-  final Color _backgroundColor = Color(0xFF0A0A0B);
-  final Color _surfaceColor = Color(0xFF1A1A1C);
-  final Color _cardColor = Color(0xFF1E1E21);
+  // Modern Dark Theme Colors
+  final Color _backgroundColor = Color(0xFF0F0F0F);
+  final Color _surfaceColor = Color(0xFF1A1A1A);
+  final Color _cardColor = Color(0xFF262626);
   final Color _primaryText = Color(0xFFFFFFFF);
-  final Color _secondaryText = Color(0xFFB3B3B3);
-  final Color _tertiaryText = Color(0xFF6B7280);
-  final Color _accentColor = Color(0xFF3B82F6);
+  final Color _secondaryText = Color(0xFFBBBBBB);
+  final Color _tertiaryText = Color(0xFF888888);
+  final Color _accentColor = Color(0xFF4F46E5);
+  final Color _borderColor = Color(0xFF333333);
 
   @override
   void initState() {
@@ -53,71 +56,64 @@ class _MagazaScreenState extends State<MagazaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _backgroundColor,
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          _buildSearchAndFilters(),
-          _buildUserCreditsCard(),
-          Expanded(child: _buildListingsContent()),
+      body: CustomScrollView(
+        slivers: [
+          _buildSliverAppBar(),
+          SliverToBoxAdapter(
+            child: _buildSearchAndFilters(),
+          ),
+          _isLoading ? _buildLoadingSliver() : _buildListingsGrid(),
         ],
       ),
-      floatingActionButton: _buildFloatingActionButton(),
+      floatingActionButton: _buildMinimalistFAB(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
+  Widget _buildSliverAppBar() {
+    return SliverAppBar(
       backgroundColor: _backgroundColor,
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
-      title: Text(
-        'Mağaza',
-        style: TextStyle(
-          color: _primaryText,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      actions: [
-        IconButton(
-          onPressed: () => _loadListings(),
-          icon: Icon(Icons.refresh, color: _primaryText),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUserCreditsCard() {
-    return Container(
-      margin: EdgeInsets.all(16),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _cardColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
+      floating: true,
+      snap: true,
+      automaticallyImplyLeading: false,
+      title: Row(
         children: [
-          Icon(Icons.account_balance_wallet, color: _accentColor),
+          Icon(Icons.store_outlined, color: _primaryText, size: 24),
           SizedBox(width: 12),
           Text(
-            'İlan Hakkı: $_userCredits',
+            'Mağaza',
             style: TextStyle(
               color: _primaryText,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.5,
             ),
           ),
           Spacer(),
-          ElevatedButton(
-            onPressed: _buyCredit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _surfaceColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _borderColor, width: 1),
             ),
-            child: Text(
-              'Satın Al',
-              style: TextStyle(color: Colors.white),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.account_balance_wallet_outlined,
+                    color: _accentColor, size: 16),
+                SizedBox(width: 6),
+                Text(
+                  '$_userCredits',
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -127,57 +123,50 @@ class _MagazaScreenState extends State<MagazaScreen> {
 
   Widget _buildSearchAndFilters() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(20),
       child: Column(
         children: [
-          // Search bar
-          TextField(
-            controller: _searchController,
-            style: TextStyle(color: _primaryText),
-            decoration: InputDecoration(
-              hintText: 'İlan ara...',
-              hintStyle: TextStyle(color: _tertiaryText),
-              prefixIcon: Icon(Icons.search, color: _tertiaryText),
-              filled: true,
-              fillColor: _surfaceColor,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
+          // Search Bar
+          Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: _surfaceColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _borderColor, width: 1),
             ),
-            onChanged: (value) => setState(() => _searchQuery = value),
+            child: TextField(
+              controller: _searchController,
+              style: TextStyle(color: _primaryText, fontSize: 16),
+              decoration: InputDecoration(
+                hintText: 'Ara...',
+                hintStyle: TextStyle(color: _tertiaryText),
+                prefixIcon: Icon(Icons.search_outlined, color: _tertiaryText),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onChanged: (value) {
+                setState(() => _searchQuery = value);
+                _filterListings();
+              },
+            ),
           ),
-          SizedBox(height: 12),
-          // Filter buttons
+          SizedBox(height: 16),
+          // Filter Row
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _showCategoryFilter,
-                  icon: Icon(Icons.category, size: 16),
-                  label: Text(_selectedCategory),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _surfaceColor,
-                    foregroundColor: _primaryText,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
+                child: _buildFilterChip(
+                  _selectedCategory,
+                  Icons.category_outlined,
+                      () => _showCategoryFilter(),
                 ),
               ),
-              SizedBox(width: 8),
+              SizedBox(width: 12),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _showSortFilter,
-                  icon: Icon(Icons.sort, size: 16),
-                  label: Text(_priceSort),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _surfaceColor,
-                    foregroundColor: _primaryText,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
+                child: _buildFilterChip(
+                  _priceSort,
+                  Icons.sort_outlined,
+                      () => _showSortFilter(),
                 ),
               ),
             ],
@@ -187,81 +176,116 @@ class _MagazaScreenState extends State<MagazaScreen> {
     );
   }
 
-  Widget _buildListingsContent() {
-    if (_isLoading) {
-      return Center(child: CircularProgressIndicator(color: _accentColor));
+  Widget _buildFilterChip(String text, IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _borderColor, width: 1),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: _tertiaryText, size: 18),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: _secondaryText,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(Icons.keyboard_arrow_down, color: _tertiaryText, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingSliver() {
+    return SliverFillRemaining(
+      child: Center(
+        child: CircularProgressIndicator(
+          color: _accentColor,
+          strokeWidth: 2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListingsGrid() {
+    final filteredListings = _getFilteredListings();
+
+    if (filteredListings.isEmpty) {
+      return SliverFillRemaining(
+        child: _buildEmptyState(),
+      );
     }
 
-    final filtered = filteredListings;
-    if (filtered.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadListings,
-      color: _accentColor,
-      child: ListView.builder(
-        padding: EdgeInsets.all(16),
-        itemCount: filtered.length,
-        itemBuilder: (context, index) => _buildListingCard(filtered[index]),
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 100),
+      sliver: SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.75,
+        ),
+        delegate: SliverChildBuilderDelegate(
+              (context, index) => _buildListingCard(filteredListings[index]),
+          childCount: filteredListings.length,
+        ),
       ),
     );
   }
 
   Widget _buildListingCard(dynamic listing) {
-    // Resim URL'sini kontrol et
-    String? imageUrl;
-
-    // images bir dizi mi kontrol et
-    if (listing['images'] is List && listing['images'].isNotEmpty) {
-      // İlk resmi al
-      final firstImage = listing['images'][0];
-
-      // Eğer resim bir Map ise 'url' anahtarını kontrol et
-      if (firstImage is Map) {
-        imageUrl = firstImage['url']?.toString();
-      }
-      // Eğer direkt bir String ise
-      else if (firstImage is String) {
-        imageUrl = firstImage;
+    // Resim URL'lerini işle
+    List<String> imageUrls = [];
+    if (listing['images'] is List) {
+      for (var image in listing['images']) {
+        if (image is Map && image['url'] != null) {
+          final url = image['url'].toString();
+          imageUrls.add(url.startsWith('http') ? url : '${UrlConstants.apiBaseUrl}$url');
+        } else if (image is String) {
+          imageUrls.add(image.startsWith('http') ? image : '${UrlConstants.apiBaseUrl}$image');
+        }
       }
     }
 
-    // Eğer URL relative ise base URL ekle
-    if (imageUrl != null && !imageUrl.startsWith('http')) {
-      imageUrl = '${UrlConstants.apiBaseUrl}$imageUrl';
-    }
-
-    return Card(
-      color: _cardColor,
-      margin: EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () => _showListingDetail(listing),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: _surfaceColor,
-                  borderRadius: BorderRadius.circular(8),
-                  image: imageUrl != null
-                      ? DecorationImage(
-                    image: NetworkImage(imageUrl),
-                    fit: BoxFit.cover,
-                  )
-                      : null,
-                ),
-                child: imageUrl == null
-                    ? Icon(Icons.image, color: _tertiaryText, size: 32)
-                    : null,
+    return GestureDetector(
+      onTap: () => _showListingDetail(listing),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _borderColor, width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image Section with Navigation
+            Expanded(
+              flex: 3,
+              child: ClipRRect(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                child: imageUrls.isNotEmpty
+                    ? _buildImageCarousel(imageUrls)
+                    : _buildPlaceholderImage(),
               ),
-              SizedBox(width: 16),
-              Expanded(
+            ),
+            // Content Section
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -271,6 +295,7 @@ class _MagazaScreenState extends State<MagazaScreen> {
                         color: _primaryText,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
+                        height: 1.2,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -281,20 +306,121 @@ class _MagazaScreenState extends State<MagazaScreen> {
                       style: TextStyle(
                         color: _accentColor,
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    Spacer(),
                     Text(
                       listing['category']?.toString() ?? 'Kategori Yok',
-                      style: TextStyle(color: _tertiaryText, fontSize: 12),
+                      style: TextStyle(
+                        color: _tertiaryText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildImageCarousel(List<String> imageUrls) {
+    if (imageUrls.length == 1) {
+      return Image.network(
+        imageUrls[0],
+        fit: BoxFit.cover,
+        width: double.infinity,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(),
+      );
+    }
+
+    return Stack(
+      children: [
+        PageView.builder(
+          itemCount: imageUrls.length,
+          itemBuilder: (context, index) {
+            return Image.network(
+              imageUrls[index],
+              fit: BoxFit.cover,
+              width: double.infinity,
+              errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(),
+            );
+          },
+        ),
+        // Navigation arrows
+        if (imageUrls.length > 1) ...[
+          // Left arrow
+          Positioned(
+            left: 8,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.chevron_left, color: Colors.white, size: 20),
+              ),
+            ),
+          ),
+          // Right arrow
+          Positioned(
+            right: 8,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.chevron_right, color: Colors.white, size: 20),
+              ),
+            ),
+          ),
+        ],
+        // Dots indicator
+        if (imageUrls.length > 1)
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: imageUrls.asMap().entries.map((entry) {
+                return Container(
+                  width: 6,
+                  height: 6,
+                  margin: EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPlaceholderImage() {
+    return Container(
+      width: double.infinity,
+      color: _surfaceColor,
+      child: Icon(
+        Icons.image_outlined,
+        color: _tertiaryText,
+        size: 48,
       ),
     );
   }
@@ -304,38 +430,288 @@ class _MagazaScreenState extends State<MagazaScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.store_outlined, color: _tertiaryText, size: 64),
-          SizedBox(height: 16),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: _surfaceColor,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.store_outlined,
+              color: _tertiaryText,
+              size: 40,
+            ),
+          ),
+          SizedBox(height: 24),
           Text(
             'Henüz ilan bulunamadı',
             style: TextStyle(
               color: _secondaryText,
               fontSize: 18,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
           SizedBox(height: 8),
           Text(
             'İlk ilanınızı oluşturun',
-            style: TextStyle(color: _tertiaryText, fontSize: 14),
+            style: TextStyle(
+              color: _tertiaryText,
+              fontSize: 14,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFloatingActionButton() {
-    return FloatingActionButton.extended(
-      onPressed: () => _showCreateListingDialog(),
-      backgroundColor: _accentColor,
-      label: Text(
-        'İlan Ver',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
+  Widget _buildMinimalistFAB() {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: _accentColor,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: _accentColor.withOpacity(0.3),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: () => _showCreateListingDialog(),
+          child: Icon(
+            Icons.add,
+            color: Colors.white,
+            size: 24,
+          ),
         ),
       ),
-      icon: Icon(Icons.add, color: Colors.white),
+    );
+  }
+
+  // Filter and sorting methods
+  List<dynamic> _getFilteredListings() {
+    List<dynamic> filtered = List.from(_listings);
+
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((listing) {
+        final title = listing['title']?.toString().toLowerCase() ?? '';
+        final description = listing['description']?.toString().toLowerCase() ?? '';
+        final category = listing['category']?.toString().toLowerCase() ?? '';
+        final query = _searchQuery.toLowerCase();
+
+        return title.contains(query) ||
+            description.contains(query) ||
+            category.contains(query);
+      }).toList();
+    }
+
+    if (_selectedCategory != 'Tümü') {
+      filtered = filtered.where((listing) =>
+      listing['category']?.toString() == _selectedCategory
+      ).toList();
+    }
+
+    // Sorting
+    switch (_priceSort) {
+      case 'Artan Fiyat':
+        filtered.sort((a, b) =>
+            (double.tryParse(a['price']?.toString() ?? '0') ?? 0)
+                .compareTo(double.tryParse(b['price']?.toString() ?? '0') ?? 0)
+        );
+        break;
+      case 'Azalan Fiyat':
+        filtered.sort((a, b) =>
+            (double.tryParse(b['price']?.toString() ?? '0') ?? 0)
+                .compareTo(double.tryParse(a['price']?.toString() ?? '0') ?? 0)
+        );
+        break;
+      case 'Eskiden Yeniye':
+        filtered.sort((a, b) =>
+            DateTime.parse(a['createdAt'] ?? '1970-01-01')
+                .compareTo(DateTime.parse(b['createdAt'] ?? '1970-01-01'))
+        );
+        break;
+      default: // Yeniden Eskiye
+        filtered.sort((a, b) =>
+            DateTime.parse(b['createdAt'] ?? '1970-01-01')
+                .compareTo(DateTime.parse(a['createdAt'] ?? '1970-01-01'))
+        );
+    }
+
+    return filtered;
+  }
+
+  void _filterListings() {
+    setState(() {});
+  }
+
+  void _showCategoryFilter() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _backgroundColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Kategori Seçin',
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 20),
+            ..._categories.map((category) => ListTile(
+              title: Text(
+                category,
+                style: TextStyle(color: _primaryText),
+              ),
+              trailing: _selectedCategory == category
+                  ? Icon(Icons.check_circle, color: _accentColor)
+                  : null,
+              onTap: () {
+                setState(() => _selectedCategory = category);
+                Navigator.pop(context);
+              },
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSortFilter() {
+    final sorts = ['Yeniden Eskiye', 'Eskiden Yeniye', 'Artan Fiyat', 'Azalan Fiyat'];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _backgroundColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Sıralama',
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 20),
+            ...sorts.map((sort) => ListTile(
+              title: Text(
+                sort,
+                style: TextStyle(color: _primaryText),
+              ),
+              trailing: _priceSort == sort
+                  ? Icon(Icons.check_circle, color: _accentColor)
+                  : null,
+              onTap: () {
+                setState(() => _priceSort = sort);
+                Navigator.pop(context);
+                _filterListings();
+              },
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showListingDetail(dynamic listing) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ListingDetailScreen(listing: listing),
+      ),
+    );
+  }
+
+  void _showCreateListingDialog() async {
+    await _loadUserCredits();
+
+    if (_userCredits <= 0) {
+      _showBuyCreditDialog();
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CreateListingScreen(
+            onListingCreated: () {
+              _loadListings();
+              _loadUserCredits();
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showBuyCreditDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _cardColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Text(
+          'Kredi Gerekli',
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'İlan vermek için krediniz bulunmuyor. Kredi satın almak ister misiniz?',
+          style: TextStyle(color: _secondaryText, fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'İptal',
+              style: TextStyle(color: _tertiaryText),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _buyCredit();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accentColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Kredi Satın Al',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -382,7 +758,6 @@ class _MagazaScreenState extends State<MagazaScreen> {
     }
   }
 
-  // DÜZELTİLMİŞ kredi satın alma - gerçek API çağrısı
   Future<void> _buyCredit() async {
     try {
       setState(() => _isLoading = true);
@@ -395,7 +770,6 @@ class _MagazaScreenState extends State<MagazaScreen> {
         return;
       }
 
-      // Backend'e gerçek API çağrısı yap
       final response = await _dio.post(
         '${UrlConstants.apiBaseUrl}/api/store/rights/purchase',
         data: {'rightsAmount': 1},
@@ -408,7 +782,7 @@ class _MagazaScreenState extends State<MagazaScreen> {
         setState(() {
           _userCredits = response.data['rights']['availableRights'] ?? _userCredits + 1;
         });
-        _showMessage('1 İlan hakkı satın alındı!', isError: false);
+        _showMessage('1 Kredi satın alındı!', isError: false);
       } else {
         _showMessage(response.data['message'] ?? 'Satın alma işlemi başarısız', isError: true);
       }
@@ -421,213 +795,6 @@ class _MagazaScreenState extends State<MagazaScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  // İlan Ver Dialog'u - DÜZELTİLMİŞ kredi kontrolü
-  void _showCreateListingDialog() async {
-    // Önce güncel kredi durumunu kontrol et
-    await _loadUserCredits();
-
-    if (_userCredits <= 0) {
-      // Kredi yoksa satın alma önerisi
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: _surfaceColor,
-          title: Text(
-            'İlan Vermek İçin Kredi Gerekli',
-            style: TextStyle(color: _primaryText),
-          ),
-          content: Text(
-            'İlan vermek için krediniz bulunmuyor. Kredi satın almak ister misiniz?',
-            style: TextStyle(color: _secondaryText),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('İptal', style: TextStyle(color: _tertiaryText)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _buyCredit();
-                // Satın alma başarılıysa ilan verme sayfasına git
-                if (mounted && _userCredits > 0) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CreateListingScreen(
-                        onListingCreated: _loadListings,
-                      ),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: _accentColor),
-              child: Text('Satın Al', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    // Kredi varsa direkt ilan oluşturma sayfasına git
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => CreateListingScreen(
-            onListingCreated: _loadListings,
-          ),
-        ),
-      );
-    }
-  }
-
-  // Filter methods
-  List<dynamic> get filteredListings {
-    List<dynamic> filtered = List.from(_listings);
-
-    // Search filter
-    if (_searchQuery.isNotEmpty) {
-      filtered = filtered.where((listing) {
-        final title = listing['title']?.toString().toLowerCase() ?? '';
-        final description = listing['description']?.toString().toLowerCase() ?? '';
-        final listingNumber = listing['listingNumber']?.toString().toLowerCase() ?? '';
-        final searchLower = _searchQuery.toLowerCase();
-
-        return title.contains(searchLower) ||
-            description.contains(searchLower) ||
-            listingNumber.contains(searchLower);
-      }).toList();
-    }
-
-    // Category filter
-    if (_selectedCategory != 'Tümü') {
-      filtered = filtered.where((listing) =>
-      listing['category']?.toString() == _selectedCategory).toList();
-    }
-
-    // Price filter
-    filtered = filtered.where((listing) {
-      final price = (listing['price'] ?? 0).toDouble();
-      return price >= _priceRange.start && price <= _priceRange.end;
-    }).toList();
-
-    // Sort
-    switch (_priceSort) {
-      case 'Artan Fiyat':
-        filtered.sort((a, b) => ((a['price'] ?? 0).toDouble()).compareTo((b['price'] ?? 0).toDouble()));
-        break;
-      case 'Azalan Fiyat':
-        filtered.sort((a, b) => ((b['price'] ?? 0).toDouble()).compareTo((a['price'] ?? 0).toDouble()));
-        break;
-      case 'Eskiden Yeniye':
-        filtered.sort((a, b) => DateTime.parse(a['createdAt'] ?? '').compareTo(DateTime.parse(b['createdAt'] ?? '')));
-        break;
-      default: // Yeniden Eskiye
-        filtered.sort((a, b) => DateTime.parse(b['createdAt'] ?? '').compareTo(DateTime.parse(a['createdAt'] ?? '')));
-    }
-
-    return filtered;
-  }
-
-  // Dialog methods
-  void _showCategoryFilter() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: _surfaceColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: EdgeInsets.all(20),
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.7,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Kategori Seç',
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: 16),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: _categories.map((category) => ListTile(
-                    title: Text(category, style: TextStyle(color: _primaryText)),
-                    trailing: _selectedCategory == category
-                        ? Icon(Icons.check, color: _accentColor)
-                        : null,
-                    onTap: () {
-                      setState(() => _selectedCategory = category);
-                      Navigator.pop(context);
-                    },
-                  )).toList(),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showSortFilter() {
-    final sorts = ['Yeniden Eskiye', 'Eskiden Yeniye', 'Artan Fiyat', 'Azalan Fiyat'];
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: _surfaceColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Sıralama',
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: 16),
-            ...sorts.map((sort) => ListTile(
-              title: Text(sort, style: TextStyle(color: _primaryText)),
-              trailing: _priceSort == sort
-                  ? Icon(Icons.check, color: _accentColor)
-                  : null,
-              onTap: () {
-                setState(() => _priceSort = sort);
-                Navigator.pop(context);
-              },
-            )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showListingDetail(dynamic listing) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ListingDetailScreen(listing: listing),
-      ),
-    );
   }
 
   void _showMessage(String message, {required bool isError}) {
@@ -651,7 +818,7 @@ class _MagazaScreenState extends State<MagazaScreen> {
   List<String> get categories => _categories;
 }
 
-// Create Listing Screen - DÜZELTİLMİŞ
+// Create Listing Screen
 class CreateListingScreen extends StatefulWidget {
   final VoidCallback onListingCreated;
 
@@ -666,7 +833,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final Dio _dio = Dio();
   final ImagePicker _picker = ImagePicker();
 
-  // Form controllers
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -676,16 +842,20 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   List<File> _selectedImages = [];
   bool _isLoading = false;
 
-  final List<String> _categories = ['Elektronik', 'Giyim', 'Ev & Yaşam', 'Spor', 'Kitap', 'Oyun', 'Müzik Aleti', 'Diğer'];
+  final List<String> _categories = [
+    'Elektronik', 'Giyim', 'Ev & Yaşam', 'Spor',
+    'Kitap', 'Oyun', 'Müzik Aleti', 'Diğer'
+  ];
 
-  // Colors
-  final Color _backgroundColor = Color(0xFF0A0A0B);
-  final Color _surfaceColor = Color(0xFF1A1A1C);
-  final Color _cardColor = Color(0xFF1E1E21);
+  // Dark Theme Colors
+  final Color _backgroundColor = Color(0xFF0F0F0F);
+  final Color _surfaceColor = Color(0xFF1A1A1A);
+  final Color _cardColor = Color(0xFF262626);
   final Color _primaryText = Color(0xFFFFFFFF);
-  final Color _secondaryText = Color(0xFFB3B3B3);
-  final Color _tertiaryText = Color(0xFF6B7280);
-  final Color _accentColor = Color(0xFF3B82F6);
+  final Color _secondaryText = Color(0xFFBBBBBB);
+  final Color _tertiaryText = Color(0xFF888888);
+  final Color _accentColor = Color(0xFF4F46E5);
+  final Color _borderColor = Color(0xFF333333);
 
   @override
   Widget build(BuildContext context) {
@@ -694,31 +864,36 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       appBar: AppBar(
         backgroundColor: _backgroundColor,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         title: Text(
           'İlan Oluştur',
-          style: TextStyle(color: _primaryText),
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         iconTheme: IconThemeData(color: _primaryText),
       ),
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(20),
+          padding: EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildFormField('Başlık', _titleController, 'İlan başlığını yazın'),
-              SizedBox(height: 20),
+              SizedBox(height: 24),
               _buildCategoryDropdown(),
-              SizedBox(height: 20),
-              _buildFormField('Fiyat', _priceController, 'Fiyat (₺)', isNumber: true),
-              SizedBox(height: 20),
-              _buildFormField('Telefon', _phoneController, 'Telefon numaranız'),
-              SizedBox(height: 20),
-              _buildFormField('Açıklama', _descriptionController, 'İlan açıklaması', maxLines: 4),
-              SizedBox(height: 20),
+              SizedBox(height: 24),
+              _buildFormField('Açıklama', _descriptionController, 'İlan açıklamasını yazın', maxLines: 4),
+              SizedBox(height: 24),
+              _buildFormField('Fiyat (₺)', _priceController, '0', keyboardType: TextInputType.number),
+              SizedBox(height: 24),
+              _buildFormField('Telefon', _phoneController, 'İletişim numaranız'),
+              SizedBox(height: 24),
               _buildImageSection(),
-              SizedBox(height: 30),
+              SizedBox(height: 32),
               _buildCreateButton(),
             ],
           ),
@@ -727,7 +902,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     );
   }
 
-  Widget _buildFormField(String label, TextEditingController controller, String hint, {bool isNumber = false, int maxLines = 1}) {
+  Widget _buildFormField(String label, TextEditingController controller, String hint,
+      {int maxLines = 1, TextInputType? keyboardType}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -736,37 +912,34 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           style: TextStyle(
             color: _primaryText,
             fontSize: 16,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
           ),
         ),
         SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          style: TextStyle(color: _primaryText),
-          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: _tertiaryText),
-            filled: true,
-            fillColor: _surfaceColor,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
+        Container(
+          decoration: BoxDecoration(
+            color: _surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _borderColor, width: 1),
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return '$label gereklidir';
-            }
-            if (isNumber) {
-              final price = double.tryParse(value);
-              if (price == null || price <= 0) {
-                return 'Geçerli bir fiyat girin';
+          child: TextFormField(
+            controller: controller,
+            maxLines: maxLines,
+            keyboardType: keyboardType,
+            style: TextStyle(color: _primaryText, fontSize: 16),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: TextStyle(color: _tertiaryText),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.all(16),
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return '$label gereklidir';
               }
-            }
-            return null;
-          },
+              return null;
+            },
+          ),
         ),
       ],
     );
@@ -781,27 +954,35 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           style: TextStyle(
             color: _primaryText,
             fontSize: 16,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
           ),
         ),
         SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: _selectedCategory,
-          dropdownColor: _surfaceColor,
-          style: TextStyle(color: _primaryText),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: _surfaceColor,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: _surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _borderColor, width: 1),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedCategory,
+              dropdownColor: _surfaceColor,
+              style: TextStyle(color: _primaryText, fontSize: 16),
+              icon: Icon(Icons.keyboard_arrow_down, color: _tertiaryText),
+              items: _categories.map((category) {
+                return DropdownMenuItem(
+                  value: category,
+                  child: Text(category),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() => _selectedCategory = value!);
+              },
             ),
           ),
-          items: _categories.map((category) => DropdownMenuItem(
-            value: category,
-            child: Text(category),
-          )).toList(),
-          onChanged: (value) => setState(() => _selectedCategory = value!),
         ),
       ],
     );
@@ -818,67 +999,118 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               style: TextStyle(
                 color: _primaryText,
                 fontSize: 16,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
             Spacer(),
             Text(
               '${_selectedImages.length}/5',
-              style: TextStyle(color: _tertiaryText),
+              style: TextStyle(
+                color: _tertiaryText,
+                fontSize: 14,
+              ),
             ),
           ],
         ),
         SizedBox(height: 12),
-        if (_selectedImages.isNotEmpty)
-          Container(
+
+        // Add Image Button
+        GestureDetector(
+          onTap: _pickImages,
+          child: Container(
+            height: 120,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: _surfaceColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _borderColor,
+                width: 1,
+                style: BorderStyle.solid,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: _tertiaryText,
+                  size: 40,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Resim Ekle',
+                  style: TextStyle(
+                    color: _secondaryText,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  'En fazla 5 resim',
+                  style: TextStyle(
+                    color: _tertiaryText,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Selected Images
+        if (_selectedImages.isNotEmpty) ...[
+          SizedBox(height: 16),
+          SizedBox(
             height: 100,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: _selectedImages.length,
-              itemBuilder: (context, index) => Container(
-                width: 100,
-                margin: EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  image: DecorationImage(
-                    image: FileImage(_selectedImages[index]),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedImages.removeAt(index)),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.close, color: Colors.white, size: 16),
+              itemBuilder: (context, index) {
+                return Container(
+                  margin: EdgeInsets.only(right: 12),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          _selectedImages[index],
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedImages.removeAt(index);
+                            });
+                          },
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
-        SizedBox(height: 12),
-        ElevatedButton.icon(
-          onPressed: _selectedImages.length < 5 ? _pickImages : null,
-          icon: Icon(Icons.add_photo_alternate),
-          label: Text('Resim Ekle'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _surfaceColor,
-            foregroundColor: _primaryText,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
+        ],
       ],
     );
   }
@@ -894,9 +1126,17 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
+          elevation: 0,
         ),
         child: _isLoading
-            ? CircularProgressIndicator(color: Colors.white)
+            ? SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            color: Colors.white,
+            strokeWidth: 2,
+          ),
+        )
             : Text(
           'İlan Oluştur',
           style: TextStyle(
@@ -946,7 +1186,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       Response response;
 
       if (_selectedImages.isNotEmpty) {
-        // Resimli upload - FormData kullan
         FormData formData = FormData.fromMap({
           'title': _titleController.text.trim(),
           'description': _descriptionController.text.trim(),
@@ -955,16 +1194,13 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           'phoneNumber': _phoneController.text.trim(),
         });
 
-        // Resimleri ekle
         for (int i = 0; i < _selectedImages.length; i++) {
           String fileName = _selectedImages[i].path.split('/').last;
-
           formData.files.add(MapEntry(
             'images',
             await MultipartFile.fromFile(
               _selectedImages[i].path,
               filename: fileName,
-              // contentType belirtmek yerine backend'in otomatik algılamasına bırakıyoruz
             ),
           ));
         }
@@ -980,7 +1216,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           ),
         );
       } else {
-        // Resimsiz upload - JSON kullan (FormData değil!)
         response = await _dio.post(
           '${UrlConstants.apiBaseUrl}/api/store/listings',
           data: {
@@ -1001,8 +1236,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
       if (mounted && response.statusCode == 201 && response.data['success'] == true) {
         _showMessage('İlan başarıyla oluşturuldu!');
-
-        // Widget hala mounted ise işlemleri yap
         if (mounted) {
           widget.onListingCreated();
           Navigator.of(context, rootNavigator: false).pop();
@@ -1033,18 +1266,19 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   }
 
   void _showMessage(String message) {
-    // Güvenli widget kontrolleri
     if (!mounted) return;
 
     try {
       final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
       if (scaffoldMessenger != null && mounted) {
         scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text(message)),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: _surfaceColor,
+          ),
         );
       }
     } catch (e) {
-      // Hata durumunda sessizce geç
       print('SnackBar gösterme hatası: $e');
     }
   }
@@ -1060,23 +1294,34 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 }
 
 // Listing Detail Screen
-class ListingDetailScreen extends StatelessWidget {
+class ListingDetailScreen extends StatefulWidget {
   final dynamic listing;
 
   ListingDetailScreen({required this.listing});
 
   @override
-  Widget build(BuildContext context) {
-    final Color _backgroundColor = Color(0xFF0A0A0B);
-    final Color _primaryText = Color(0xFFFFFFFF);
-    final Color _secondaryText = Color(0xFFB3B3B3);
-    final Color _accentColor = Color(0xFF3B82F6);
+  _ListingDetailScreenState createState() => _ListingDetailScreenState();
+}
 
-    // Resim URL'lerini işle
+class _ListingDetailScreenState extends State<ListingDetailScreen> {
+  PageController _pageController = PageController();
+  int _currentImageIndex = 0;
+
+  final Color _backgroundColor = Color(0xFF0F0F0F);
+  final Color _surfaceColor = Color(0xFF1A1A1A);
+  final Color _cardColor = Color(0xFF262626);
+  final Color _primaryText = Color(0xFFFFFFFF);
+  final Color _secondaryText = Color(0xFFBBBBBB);
+  final Color _tertiaryText = Color(0xFF888888);
+  final Color _accentColor = Color(0xFF4F46E5);
+  final Color _borderColor = Color(0xFF333333);
+
+  @override
+  Widget build(BuildContext context) {
     List<String> imageUrls = [];
 
-    if (listing['images'] is List) {
-      for (var image in listing['images']) {
+    if (widget.listing['images'] is List) {
+      for (var image in widget.listing['images']) {
         if (image is Map && image['url'] != null) {
           final url = image['url'].toString();
           imageUrls.add(url.startsWith('http') ? url : '${UrlConstants.apiBaseUrl}$url');
@@ -1088,98 +1333,317 @@ class ListingDetailScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: _backgroundColor,
-      appBar: AppBar(
-        backgroundColor: _backgroundColor,
-        elevation: 0,
-        title: Text(
-          'İlan Detayı',
-          style: TextStyle(color: _primaryText),
-        ),
-        iconTheme: IconThemeData(color: _primaryText),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (imageUrls.isNotEmpty)
-              SizedBox(
-                height: 250,
-                child: PageView.builder(
-                  itemCount: imageUrls.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          imageUrls[index],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[800],
-                              child: Icon(Icons.broken_image,
-                                  color: Colors.grey, size: 50),
-                            );
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            SizedBox(height: 20),
-            Text(
-              listing['title']?.toString() ?? 'Başlık Yok',
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            backgroundColor: _backgroundColor,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            expandedHeight: 300,
+            pinned: true,
+            flexibleSpace: FlexibleSpaceBar(
+              background: imageUrls.isNotEmpty
+                  ? _buildImageCarousel(imageUrls)
+                  : _buildPlaceholderImage(),
             ),
-            SizedBox(height: 16),
-            Text(
-              '${listing['price']?.toString() ?? '0'} ₺',
-              style: TextStyle(
-                color: _accentColor,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
+          ),
+          SliverToBoxAdapter(
+            child: Container(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.listing['title']?.toString() ?? 'Başlık Yok',
+                    style: TextStyle(
+                      color: _primaryText,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    '${widget.listing['price']?.toString() ?? '0'} ₺',
+                    style: TextStyle(
+                      color: _accentColor,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 24),
+                  _buildInfoSection(),
+                  SizedBox(height: 24),
+                  _buildDescriptionSection(),
+                  if (widget.listing['phoneNumber'] != null) ...[
+                    SizedBox(height: 24),
+                    _buildContactSection(),
+                  ],
+                ],
               ),
             ),
-            SizedBox(height: 16),
-            Text(
-              'Açıklama',
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              listing['description']?.toString() ?? 'Açıklama yok',
-              style: TextStyle(color: _secondaryText, fontSize: 16),
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Kategori: ${listing['category']?.toString() ?? 'Kategori Yok'}',
-              style: TextStyle(color: _secondaryText, fontSize: 14),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'İlan No: ${listing['listingNumber']?.toString() ?? 'N/A'}',
-              style: TextStyle(color: _secondaryText, fontSize: 14),
-            ),
-            if (listing['phoneNumber'] != null) ...[
-              SizedBox(height: 16),
-              Text(
-                'İletişim: ${listing['phoneNumber']}',
-                style: TextStyle(color: _secondaryText, fontSize: 16),
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildImageCarousel(List<String> imageUrls) {
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          itemCount: imageUrls.length,
+          onPageChanged: (index) {
+            setState(() => _currentImageIndex = index);
+          },
+          itemBuilder: (context, index) {
+            return Image.network(
+              imageUrls[index],
+              fit: BoxFit.cover,
+              width: double.infinity,
+              errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(),
+            );
+          },
+        ),
+
+        // Navigation arrows
+        if (imageUrls.length > 1) ...[
+          Positioned(
+            left: 16,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: () {
+                  if (_currentImageIndex > 0) {
+                    _pageController.previousPage(
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                },
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.chevron_left, color: Colors.white, size: 24),
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            right: 16,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: () {
+                  if (_currentImageIndex < imageUrls.length - 1) {
+                    _pageController.nextPage(
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                },
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.chevron_right, color: Colors.white, size: 24),
+                ),
+              ),
+            ),
+          ),
+        ],
+
+        // Dots indicator
+        if (imageUrls.length > 1)
+          Positioned(
+            bottom: 16,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: imageUrls.asMap().entries.map((entry) {
+                return Container(
+                  width: 8,
+                  height: 8,
+                  margin: EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _currentImageIndex == entry.key
+                        ? Colors.white
+                        : Colors.white.withOpacity(0.4),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+        // Image counter
+        if (imageUrls.length > 1)
+          Positioned(
+            top: 50,
+            right: 16,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                '${_currentImageIndex + 1}/${imageUrls.length}',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPlaceholderImage() {
+    return Container(
+      width: double.infinity,
+      color: _surfaceColor,
+      child: Icon(
+        Icons.image_outlined,
+        color: _tertiaryText,
+        size: 80,
+      ),
+    );
+  }
+
+  Widget _buildInfoSection() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor, width: 1),
+      ),
+      child: Column(
+        children: [
+          _buildInfoRow('Kategori', widget.listing['category']?.toString() ?? 'Kategori Yok'),
+          Divider(color: _borderColor, height: 24),
+          _buildInfoRow('İlan No', widget.listing['listingNumber']?.toString() ?? 'N/A'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: _secondaryText,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDescriptionSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Açıklama',
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        SizedBox(height: 12),
+        Container(
+          padding: EdgeInsets.all(20),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: _cardColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _borderColor, width: 1),
+          ),
+          child: Text(
+            widget.listing['description']?.toString() ?? 'Açıklama yok',
+            style: TextStyle(
+              color: _secondaryText,
+              fontSize: 16,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContactSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'İletişim',
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        SizedBox(height: 12),
+        Container(
+          padding: EdgeInsets.all(20),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: _cardColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _borderColor, width: 1),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.phone_outlined, color: _accentColor, size: 24),
+              SizedBox(width: 12),
+              Text(
+                widget.listing['phoneNumber'].toString(),
+                style: TextStyle(
+                  color: _primaryText,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 }
