@@ -1,10 +1,11 @@
-// lib/menu/magaza_screen.dart - GÜNCELLENMİŞ VERSİYON - İlan sahibi bilgileri ve konum
+// lib/menu/magaza_screen.dart - TAM VE HATASIZ VERSİYON
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/create_listing_screen.dart';
 import '../screens/listing_detail_screen.dart';
+import '../screens/purchase_rights_screen.dart';
 import '../url_constants.dart';
 
 class MagazaScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   List<dynamic> _listings = [];
   int _userCredits = 0;
   bool _isLoading = false;
+  bool _isLoadingCredits = false;
   String _searchQuery = '';
   String _selectedCategory = 'Tümü';
   String _priceSort = 'Yeniden Eskiye';
@@ -31,6 +33,13 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
     'Spor', 'Kitap', 'Oyun', 'Müzik Aleti', 'Diğer'
   ];
 
+  final List<String> _sortOptions = [
+    'Yeniden Eskiye',
+    'Eskiden Yeniye',
+    'Fiyat (Düşük-Yüksek)',
+    'Fiyat (Yüksek-Düşük)'
+  ];
+
   // Modern Dark Theme Colors
   final Color _backgroundColor = Color(0xFF0F0F0F);
   final Color _surfaceColor = Color(0xFF1A1A1A);
@@ -40,6 +49,10 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   final Color _tertiaryText = Color(0xFF888888);
   final Color _accentColor = Color(0xFF6B7280);
   final Color _borderColor = Color(0xFF333333);
+  final Color _greenColor = Color(0xFF10B981);
+  final Color _blueColor = Color(0xFF3B82F6);
+  final Color _errorColor = Color(0xFFEF4444);
+  final Color _orangeColor = Color(0xFFF59E0B);
 
   @override
   void initState() {
@@ -64,48 +77,104 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
         elevation: 0,
         iconTheme: IconThemeData(color: _primaryText),
         actions: [
-          Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: Row(
-              children: [
-                Icon(Icons.account_balance_wallet, color: _accentColor, size: 20),
-                SizedBox(width: 4),
-                Text(
-                  '$_userCredits',
-                  style: TextStyle(
-                    color: _primaryText,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: _buildSearchAndFilters(),
-          ),
-          _isLoading
-              ? SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(50),
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
+          // İlan hakkı göstergesi
+          GestureDetector(
+            onTap: _goToPurchaseRights,
+            child: Container(
+              margin: EdgeInsets.only(right: 16),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _userCredits > 0 ? _greenColor.withOpacity(0.1) : _errorColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: _userCredits > 0 ? _greenColor.withOpacity(0.3) : _errorColor.withOpacity(0.3),
                 ),
               ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                      Icons.account_balance_wallet,
+                      color: _userCredits > 0 ? _greenColor : _errorColor,
+                      size: 18
+                  ),
+                  SizedBox(width: 6),
+                  _isLoadingCredits
+                      ? SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
+                    ),
+                  )
+                      : Text(
+                    '$_userCredits',
+                    style: TextStyle(
+                      color: _userCredits > 0 ? _greenColor : _errorColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          )
-              : _buildListingsGrid(),
+          ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateListingScreen(),
-        backgroundColor: _accentColor,
-        child: Icon(Icons.add, color: _primaryText),
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        color: _blueColor,
+        backgroundColor: _cardColor,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: _buildSearchAndFilters(),
+            ),
+            _isLoading
+                ? SliverToBoxAdapter(
+              child: Container(
+                height: 300,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(_blueColor),
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'İlanlar yükleniyor...',
+                        style: TextStyle(
+                          color: _secondaryText,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+                : _buildListingsGrid(),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _checkRightsAndCreateListing,
+        backgroundColor: _blueColor,
+        foregroundColor: _primaryText,
+        icon: Icon(Icons.add, size: 24),
+        label: Text(
+          'İlan Ver',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
       ),
     );
   }
@@ -115,7 +184,7 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
       padding: EdgeInsets.all(16),
       child: Column(
         children: [
-          // Arama kutusu
+          // Search bar
           Container(
             decoration: BoxDecoration(
               color: _cardColor,
@@ -128,89 +197,128 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
               decoration: InputDecoration(
                 hintText: 'İlan ara...',
                 hintStyle: TextStyle(color: _tertiaryText),
-                prefixIcon: Icon(Icons.search, color: _tertiaryText),
+                prefixIcon: Icon(Icons.search, color: _accentColor),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                  icon: Icon(Icons.clear, color: _accentColor),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                    _loadListings();
+                  },
+                )
+                    : null,
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
               onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                });
+                setState(() => _searchQuery = value);
+                _debounceSearch();
               },
             ),
           ),
-          SizedBox(height: 12),
-          // Filtreler
-          Row(
-            children: [
-              Expanded(
-                child: _buildFilterDropdown(
-                  'Kategori',
-                  _selectedCategory,
-                  _categories,
-                      (value) => setState(() => _selectedCategory = value!),
+          SizedBox(height: 16),
+
+          // Filters
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip(
+                    'Kategori',
+                    _selectedCategory,
+                    _categories,
+                        (value) {
+                      setState(() => _selectedCategory = value);
+                      _loadListings();
+                    }
                 ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: _buildFilterDropdown(
-                  'Sıralama',
-                  _priceSort,
-                  ['Yeniden Eskiye', 'Eskiden Yeniye', 'Fiyat Artan', 'Fiyat Azalan'],
-                      (value) => setState(() => _priceSort = value!),
+                SizedBox(width: 8),
+                _buildFilterChip(
+                    'Sıralama',
+                    _priceSort,
+                    _sortOptions,
+                        (value) {
+                      setState(() => _priceSort = value);
+                      _loadListings();
+                    }
                 ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
-          // Konum filtreleri
-          Row(
-            children: [
-              Expanded(
-                child: _buildFilterDropdown(
-                  'İl',
-                  _selectedProvince,
-                  ['Tüm İller', 'İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Adana', 'Konya', 'Samsun'],
-                      (value) => setState(() => _selectedProvince = value!),
+                SizedBox(width: 8),
+                _buildActionChip(
+                  'Filtrele',
+                  Icons.filter_list,
+                      () => _showFilterDialog(),
                 ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: _buildFilterDropdown(
-                  'İlçe',
-                  _selectedDistrict,
-                  ['Tüm İlçeler', 'Merkez', 'Ataşehir', 'Kadıköy', 'Beşiktaş', 'Şişli'],
-                      (value) => setState(() => _selectedDistrict = value!),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterDropdown(String hint, String value, List<String> items, Function(String?) onChanged) {
+  Widget _buildFilterChip(String label, String value, List<String> options, Function(String) onSelected) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
+      height: 36,
+      child: PopupMenuButton<String>(
+        onSelected: onSelected,
         color: _cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          hint: Text(hint, style: TextStyle(color: _tertiaryText)),
-          dropdownColor: _cardColor,
-          style: TextStyle(color: _primaryText),
-          items: items.map((item) {
-            return DropdownMenuItem(
-              value: item,
-              child: Text(item, style: TextStyle(color: _primaryText, fontSize: 12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: _cardColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _borderColor),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$label: ${value.length > 10 ? value.substring(0, 10) + '...' : value}',
+                style: TextStyle(color: _primaryText, fontSize: 12),
+              ),
+              SizedBox(width: 4),
+              Icon(Icons.arrow_drop_down, color: _accentColor, size: 16),
+            ],
+          ),
+        ),
+        itemBuilder: (context) {
+          return options.map((option) {
+            return PopupMenuItem<String>(
+              value: option,
+              child: Text(
+                option,
+                style: TextStyle(color: _primaryText),
+              ),
             );
-          }).toList(),
-          onChanged: onChanged,
+          }).toList();
+        },
+      ),
+    );
+  }
+
+  Widget _buildActionChip(String label, IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _cardColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: _accentColor, size: 16),
+            SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(color: _primaryText, fontSize: 12),
+            ),
+          ],
         ),
       ),
     );
@@ -219,25 +327,58 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   Widget _buildListingsGrid() {
     final filteredListings = _getFilteredListings();
 
-    if (filteredListings.isEmpty) {
+    if (filteredListings.isEmpty && !_isLoading) {
       return SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(50),
-            child: Column(
-              children: [
-                Icon(Icons.inventory_2_outlined, size: 64, color: _tertiaryText),
-                SizedBox(height: 16),
-                Text(
-                  'Henüz ilan bulunmuyor',
-                  style: TextStyle(
-                    color: _secondaryText,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
+        child: Container(
+          height: 400,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                  _searchQuery.isNotEmpty ? Icons.search_off : Icons.inventory_2_outlined,
+                  size: 80,
+                  color: _tertiaryText
+              ),
+              SizedBox(height: 24),
+              Text(
+                _searchQuery.isNotEmpty
+                    ? 'Arama sonucu bulunamadı'
+                    : 'Henüz ilan bulunmuyor',
+                style: TextStyle(
+                  color: _secondaryText,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                _searchQuery.isNotEmpty
+                    ? 'Farklı kelimelerle tekrar deneyin'
+                    : 'İlk ilanı siz verin!',
+                style: TextStyle(
+                  color: _tertiaryText,
+                  fontSize: 14,
+                ),
+              ),
+              if (_searchQuery.isNotEmpty) ...[
+                SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                    _loadListings();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _blueColor,
+                    foregroundColor: _primaryText,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
+                  child: Text('Tüm İlanları Göster'),
                 ),
               ],
-            ),
+            ],
           ),
         ),
       );
@@ -259,285 +400,385 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
     final location = listing['location'];
 
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: EdgeInsets.all(16),
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
         color: _cardColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _borderColor),
       ),
-      child: InkWell(
-        onTap: () => _openListingDetail(listing),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // SOL TARAF - GÖRSEL
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: _surfaceColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _borderColor),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _getFirstImage(listing),
-                  ),
-                ),
-                SizedBox(width: 16),
-                // SAĞ TARAF - BİLGİLER
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Başlık
-                      Text(
-                        listing['title']?.toString() ?? 'Başlık yok',
-                        style: TextStyle(
-                          color: _primaryText,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openListingDetail(listing),
+          child: Stack(
+            children: [
+              // Ana içerik
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // SOL TARAF - GÖRSEL
+                    Container(
+                      width: 85,
+                      height: 85,
+                      decoration: BoxDecoration(
+                        color: _surfaceColor,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _borderColor),
                       ),
-                      SizedBox(height: 4),
-                      // Kategori
-                      Text(
-                        listing['category']?.toString() ?? 'Kategori',
-                        style: TextStyle(
-                          color: _secondaryText,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: _getFirstImage(listing),
                       ),
-                      SizedBox(height: 8),
-                      // Konum
-                      if (location != null)
-                        Row(
-                          children: [
-                            Icon(Icons.location_on, size: 14, color: _accentColor),
-                            SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                '${location['district'] ?? ''}, ${location['province'] ?? ''}',
-                                style: TextStyle(
-                                  color: _secondaryText,
-                                  fontSize: 12,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(width: 12),
+
+                    // SAĞ TARAF - BİLGİLER
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Başlık (üst kısımda yer bırak)
+                          Padding(
+                            padding: EdgeInsets.only(right: 60), // Profil için yer bırak
+                            child: Text(
+                              listing['title']?.toString() ?? 'Başlık yok',
+                              style: TextStyle(
+                                color: _primaryText,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+
+                          // Kategori
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _accentColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              listing['category']?.toString() ?? 'Kategori',
+                              style: TextStyle(
+                                color: _accentColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ],
-                        ),
-                      SizedBox(height: 8),
-                      // Fiyat ve tarih
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+                          ),
+                          SizedBox(height: 8),
+
+                          // Fiyat
                           Text(
-                            '₺${listing['price']?.toString() ?? '0'}',
+                            '${listing['price']?.toString() ?? '0'} EUR',
                             style: TextStyle(
-                              color: _primaryText,
+                              color: _greenColor,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Text(
-                            _formatDate(listing['createdAt']),
-                            style: TextStyle(
-                              color: _tertiaryText,
-                              fontSize: 10,
-                            ),
+                          SizedBox(height: 6),
+
+                          // Konum ve tarih
+                          Row(
+                            children: [
+                              if (location != null) ...[
+                                Icon(Icons.location_on,
+                                    color: _tertiaryText, size: 12),
+                                SizedBox(width: 2),
+                                Expanded(
+                                  child: Text(
+                                    '${location['district'] ?? ''}, ${location['province'] ?? ''}',
+                                    style: TextStyle(
+                                      color: _tertiaryText,
+                                      fontSize: 11,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                              SizedBox(width: 8),
+                              Text(
+                                _formatDate(listing['createdAt']),
+                                style: TextStyle(
+                                  color: _tertiaryText,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // SAĞ ALT - İSTATİSTİKLER (Çok küçük)
+              if (listing['viewCount'] != null && listing['viewCount'] > 0) ...[
+                Positioned(
+                  bottom: 8,
+                  right: 12,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _surfaceColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _borderColor),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.visibility, color: _tertiaryText, size: 10),
+                        SizedBox(width: 2),
+                        Text(
+                          '${listing['viewCount']}',
+                          style: TextStyle(
+                            color: _tertiaryText,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
-            ),
-            // ALT KISIM - KULLANICI BİLGİLERİ
-            if (user != null) ...[
-              SizedBox(height: 12),
-              Divider(color: _borderColor, height: 1),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  // Profil resmi
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: _borderColor),
-                    ),
-                    child: ClipOval(
-                      child: _getUserProfileImage(user),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  // Kullanıcı adı
-                  Expanded(
-                    child: Text(
-                      user['username']?.toString() ?? 'Kullanıcı',
-                      style: TextStyle(
-                        color: _secondaryText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  // Görüntülenme sayısı
-                  Icon(Icons.visibility, size: 12, color: _tertiaryText),
-                  SizedBox(width: 2),
-                  Text(
-                    '${listing['viewCount'] ?? 0}',
-                    style: TextStyle(
-                      color: _tertiaryText,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _getUserProfileImage(dynamic user) {
-    String? imageUrl = user['profileImageUrl']?.toString();
-
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      final fullUrl = imageUrl.startsWith('http')
-          ? imageUrl
-          : '${UrlConstants.apiBaseUrl}$imageUrl';
-
-      return Image.network(
-        fullUrl,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => _buildUserPlaceholder(),
-      );
-    }
-
-    return _buildUserPlaceholder();
-  }
-
-  Widget _buildUserPlaceholder() {
-    return Container(
-      color: _accentColor,
-      child: Icon(
-        Icons.person,
-        color: _primaryText,
-        size: 16,
-      ),
-    );
-  }
-
   Widget _getFirstImage(dynamic listing) {
-    if (listing['images'] != null && listing['images'].isNotEmpty) {
-      var firstImage = listing['images'][0];
-      String imageUrl = '';
-
-      if (firstImage is Map && firstImage['url'] != null) {
-        imageUrl = firstImage['url'].toString();
-      } else if (firstImage is String) {
-        imageUrl = firstImage;
-      }
-
+    final images = listing['images'] as List?;
+    if (images != null && images.isNotEmpty) {
+      final imageUrl = images[0]['url'] ?? '';
       if (imageUrl.isNotEmpty) {
-        final fullUrl = imageUrl.startsWith('http')
-            ? imageUrl
-            : '${UrlConstants.apiBaseUrl}$imageUrl';
-
         return Image.network(
-          fullUrl,
+          '${UrlConstants.apiBaseUrl}$imageUrl',
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(),
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: _surfaceColor,
+              child: Icon(Icons.image_not_supported, color: _tertiaryText, size: 32),
+            );
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              color: _surfaceColor,
+              child: Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                      : null,
+                  valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
+                  strokeWidth: 2,
+                ),
+              ),
+            );
+          },
         );
       }
     }
 
-    return _buildPlaceholderImage();
-  }
-
-  Widget _buildPlaceholderImage() {
     return Container(
       color: _surfaceColor,
-      child: Icon(
-        Icons.image_outlined,
-        color: _tertiaryText,
-        size: 32,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.image, color: _tertiaryText, size: 32),
+          SizedBox(height: 4),
+          Text(
+            'Fotoğraf Yok',
+            style: TextStyle(
+              color: _tertiaryText,
+              fontSize: 10,
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  Widget _getUserProfileImage(dynamic user, {double size = 24}) {
+    final profileImage = user['profileImage'] ?? user['profileImageUrl'];
+    if (profileImage != null && profileImage.isNotEmpty) {
+      String imageUrl = profileImage;
+      if (!imageUrl.startsWith('http') && !imageUrl.startsWith('/')) {
+        imageUrl = '/uploads/$imageUrl';
+      }
+
+      return Image.network(
+        '${UrlConstants.apiBaseUrl}$imageUrl',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: size,
+            height: size,
+            color: _accentColor.withOpacity(0.3),
+            child: Icon(Icons.person, color: _accentColor, size: size * 0.6),
+          );
+        },
+      );
+    }
+
+    return Container(
+      width: size,
+      height: size,
+      color: _accentColor.withOpacity(0.3),
+      child: Icon(Icons.person, color: _accentColor, size: size * 0.6),
+    );
+  }
+
+  List<dynamic> _getFilteredListings() {
+    List<dynamic> filtered = List.from(_listings);
+
+    // Kategori filtresi
+    if (_selectedCategory != 'Tümü') {
+      filtered = filtered.where((listing) =>
+      listing['category'] == _selectedCategory).toList();
+    }
+
+    // Arama filtresi
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((listing) {
+        final title = listing['title']?.toString().toLowerCase() ?? '';
+        final description = listing['description']?.toString().toLowerCase() ?? '';
+        final category = listing['category']?.toString().toLowerCase() ?? '';
+        final listingNumber = listing['listingNumber']?.toString().toLowerCase() ?? '';
+        final query = _searchQuery.toLowerCase();
+
+        return title.contains(query) ||
+            description.contains(query) ||
+            category.contains(query) ||
+            listingNumber.contains(query);
+      }).toList();
+    }
+
+    // Sıralama
+    switch (_priceSort) {
+      case 'Yeniden Eskiye':
+        filtered.sort((a, b) => DateTime.parse(b['createdAt'])
+            .compareTo(DateTime.parse(a['createdAt'])));
+        break;
+      case 'Eskiden Yeniye':
+        filtered.sort((a, b) => DateTime.parse(a['createdAt'])
+            .compareTo(DateTime.parse(b['createdAt'])));
+        break;
+      case 'Fiyat (Düşük-Yüksek)':
+        filtered.sort((a, b) => (a['price'] ?? 0).compareTo(b['price'] ?? 0));
+        break;
+      case 'Fiyat (Yüksek-Düşük)':
+        filtered.sort((a, b) => (b['price'] ?? 0).compareTo(a['price'] ?? 0));
+        break;
+    }
+
+    return filtered;
+  }
+
   String _formatDate(dynamic dateString) {
     if (dateString == null) return '';
+
     try {
       final date = DateTime.parse(dateString.toString());
-      return '${date.day}/${date.month}/${date.year}';
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays > 7) {
+        return '${difference.inDays} gün önce';
+      } else if (difference.inDays > 0) {
+        return '${difference.inDays} gün önce';
+      } else if (difference.inHours > 0) {
+        return '${difference.inHours} saat önce';
+      } else if (difference.inMinutes > 0) {
+        return '${difference.inMinutes} dakika önce';
+      } else {
+        return 'Şimdi';
+      }
     } catch (e) {
       return '';
     }
   }
 
-  void _openListingDetail(dynamic listing) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ListingDetailScreen(listing: listing),
-      ),
-    );
+  void _debounceSearch() {
+    Future.delayed(Duration(milliseconds: 800), () {
+      if (mounted && _searchController.text == _searchQuery) {
+        _loadListings();
+      }
+    });
   }
 
-  List<dynamic> _getFilteredListings() {
-    return _listings.where((listing) {
-      final matchesCategory = _selectedCategory == 'Tümü' ||
-          listing['category']?.toString() == _selectedCategory;
-
-      final matchesSearch = _searchQuery.isEmpty ||
-          listing['title']?.toString().toLowerCase().contains(_searchQuery.toLowerCase()) == true ||
-          listing['description']?.toString().toLowerCase().contains(_searchQuery.toLowerCase()) == true;
-
-      // Konum filtreleri
-      bool matchesLocation = true;
-      if (_selectedProvince != 'Tüm İller') {
-        matchesLocation = listing['location']?['province']?.toString() == _selectedProvince;
-      }
-      if (_selectedDistrict != 'Tüm İlçeler' && matchesLocation) {
-        matchesLocation = listing['location']?['district']?.toString() == _selectedDistrict;
-      }
-
-      return matchesCategory && matchesSearch && matchesLocation;
-    }).toList();
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _loadListings(),
+      _loadUserCredits(),
+    ]);
   }
 
   Future<void> _loadListings() async {
-    if (!mounted) return;
-
     setState(() => _isLoading = true);
 
     try {
-      final response = await _dio.get('${UrlConstants.apiBaseUrl}/api/store/listings');
+      Map<String, dynamic> queryParams = {};
 
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        if (mounted) {
-          setState(() {
-            _listings = response.data['listings'] ?? [];
-          });
-        }
+      if (_selectedCategory != 'Tümü') {
+        queryParams['category'] = _selectedCategory;
+      }
+
+      if (_searchQuery.isNotEmpty) {
+        queryParams['search'] = _searchQuery;
+      }
+
+      // Sıralama parametresi
+      switch (_priceSort) {
+        case 'Yeniden Eskiye':
+          queryParams['sortBy'] = 'createdAt';
+          queryParams['sortOrder'] = 'desc';
+          break;
+        case 'Eskiden Yeniye':
+          queryParams['sortBy'] = 'createdAt';
+          queryParams['sortOrder'] = 'asc';
+          break;
+        case 'Fiyat (Düşük-Yüksek)':
+          queryParams['sortBy'] = 'price';
+          queryParams['sortOrder'] = 'asc';
+          break;
+        case 'Fiyat (Yüksek-Düşük)':
+          queryParams['sortBy'] = 'price';
+          queryParams['sortOrder'] = 'desc';
+          break;
+      }
+
+      print('🔍 Loading listings with params: $queryParams');
+
+      final response = await _dio.get(
+        '${UrlConstants.apiBaseUrl}/api/store/listings',
+        queryParameters: queryParams,
+      );
+
+      if (response.statusCode == 200 && response.data['success']) {
+        setState(() {
+          _listings = response.data['listings'] ?? [];
+        });
+        print('✅ Loaded ${_listings.length} listings');
+      } else {
+        _showMessage('İlanlar yüklenirken hata oluştu: ${response.data['message'] ?? 'Bilinmeyen hata'}');
       }
     } catch (e) {
-      print('Listeleri yükleme hatası: $e');
+      print('❌ Listings yükleme hatası: $e');
+      _showMessage('İlanlar yüklenirken hata oluştu. İnternet bağlantınızı kontrol edin.');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -546,11 +787,16 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   }
 
   Future<void> _loadUserCredits() async {
+    setState(() => _isLoadingCredits = true);
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      final authToken = prefs.getString('authToken');
+      final authToken = prefs.getString('auth_token');
 
-      if (authToken == null) return;
+      if (authToken == null) {
+        print('⚠️ Auth token bulunamadı');
+        return;
+      }
 
       final response = await _dio.get(
         '${UrlConstants.apiBaseUrl}/api/store/rights',
@@ -559,28 +805,206 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
         ),
       );
 
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        if (mounted) {
-          setState(() {
-            _userCredits = response.data['rights']['availableRights'] ?? 0;
-          });
-        }
+      if (response.statusCode == 200 && response.data['success']) {
+        setState(() {
+          _userCredits = response.data['rights']['availableRights'] ?? 0;
+        });
+        print('✅ User credits loaded: $_userCredits');
       }
     } catch (e) {
-      print('Kredi yükleme hatası: $e');
+      print('❌ Credits yükleme hatası: $e');
+      // Sessizce hata ver, kullanıcıyı rahatsız etme
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingCredits = false);
+      }
     }
   }
 
-  void _showCreateListingScreen() {
+  Future<void> _checkRightsAndCreateListing() async {
+    // Önce mevcut hakları kontrol et
+    await _loadUserCredits();
+
+    if (_userCredits <= 0) {
+      // İlan hakkı yok - önce satın alma sayfasını göster
+      _showNoRightsDialog();
+    } else {
+      // İlan hakkı var - direkt ilan oluşturma sayfasına git
+      _openCreateListing();
+    }
+  }
+
+  void _showNoRightsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: _cardColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber, color: _orangeColor, size: 28),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'İlan Hakkı Gerekli',
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'İlan verebilmek için önce ilan hakkı satın almanız gerekiyor. Satın alma sayfasına gitmek ister misiniz?',
+            style: TextStyle(
+              color: _secondaryText,
+              height: 1.4,
+              fontSize: 14,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'İptal',
+                style: TextStyle(color: _accentColor),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _goToPurchaseRights();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _blueColor,
+                foregroundColor: _primaryText,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+              child: Text(
+                'Satın Al',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showFilterDialog() {
+    // Gelecekte daha detaylı filtre seçenekleri için
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: _cardColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Gelişmiş Filtreler',
+            style: TextStyle(color: _primaryText),
+          ),
+          content: Text(
+            'Fiyat aralığı, konum ve diğer filtre seçenekleri yakında eklenecek.',
+            style: TextStyle(color: _secondaryText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Tamam',
+                style: TextStyle(color: _blueColor),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _goToPurchaseRights() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PurchaseRightsScreen(
+          onPurchaseCompleted: () {
+            // Satın alma tamamlandığında hakları yeniden kontrol et
+            _loadUserCredits();
+          },
+        ),
+      ),
+    );
+
+    // Eğer satın alma başarılıysa hakları yeniden kontrol et
+    if (result == true) {
+      await _loadUserCredits();
+      // Otomatik olarak ilan oluşturma sayfasına git
+      Future.delayed(Duration(milliseconds: 500), () {
+        if (mounted && _userCredits > 0) {
+          _openCreateListing();
+        }
+      });
+    }
+  }
+
+  void _openCreateListing() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CreateListingScreen(
           onListingCreated: () {
-            _loadListings();
-            _loadUserCredits();
+            _refreshData(); // Hem ilanları hem hakları güncelle
           },
         ),
+      ),
+    );
+  }
+
+  void _openListingDetail(dynamic listing) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ListingDetailScreen(listing: listing),
+      ),
+    ).then((_) {
+      // Detay sayfasından döndüğünde listeyi yenile (görüntülenme sayısı artmış olabilir)
+      _loadListings();
+    });
+  }
+
+  void _showMessage(String message, {bool isError = true}) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: TextStyle(color: _primaryText),
+        ),
+        backgroundColor: isError ? _errorColor : _greenColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        margin: EdgeInsets.all(16),
+        action: isError
+            ? SnackBarAction(
+          label: 'Tekrar Dene',
+          textColor: _primaryText,
+          onPressed: () {
+            _refreshData();
+          },
+        )
+            : null,
       ),
     );
   }

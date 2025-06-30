@@ -1,4 +1,4 @@
-// lib/screens/create_listing_screen.dart - İlan Oluşturma Sayfası İl/İlçe ile
+// lib/screens/create_listing_screen.dart - GÜNCELLENMİŞ - İlan Hakkı Kontrolü ile
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../url_constants.dart';
+import 'purchase_rights_screen.dart';
 
 class CreateListingScreen extends StatefulWidget {
   final VoidCallback onListingCreated;
@@ -34,6 +35,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   String _selectedDistrict = '';
   List<File> _selectedImages = [];
   bool _isLoading = false;
+  bool _isCheckingRights = true;
+  int _availableRights = 0;
 
   // Dropdown options
   final List<String> _categories = [
@@ -66,7 +69,15 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final Color _accentColor = Color(0xFF6B7280);
   final Color _borderColor = Color(0xFF333333);
   final Color _greenColor = Color(0xFF10B981);
+  final Color _blueColor = Color(0xFF3B82F6);
   final Color _errorColor = Color(0xFFEF4444);
+  final Color _orangeColor = Color(0xFFF59E0B);
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUserRights();
+  }
 
   @override
   void dispose() {
@@ -87,40 +98,101 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         backgroundColor: _backgroundColor,
         elevation: 0,
         iconTheme: IconThemeData(color: _primaryText),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Row(
+              children: [
+                Icon(Icons.account_balance_wallet, color: _accentColor, size: 20),
+                SizedBox(width: 4),
+                Text(
+                  '$_availableRights',
+                  style: TextStyle(
+                    color: _availableRights > 0 ? _greenColor : _errorColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      body: Form(
-        key: _formKey,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionTitle('Temel Bilgiler'),
-                    SizedBox(height: 16),
-                    _buildBasicInfoSection(),
-                    SizedBox(height: 24),
+      body: _isCheckingRights
+          ? Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(_blueColor),
+        ),
+      )
+          : _availableRights <= 0
+          ? _buildNoRightsView()
+          : _buildCreateListingForm(),
+    );
+  }
 
-                    _buildSectionTitle('Konum Bilgileri'),
-                    SizedBox(height: 16),
-                    _buildLocationSection(),
-                    SizedBox(height: 24),
-
-                    _buildSectionTitle('Görseller'),
-                    SizedBox(height: 16),
-                    _buildImageSection(),
-                    SizedBox(height: 24),
-
-                    _buildSectionTitle('İletişim'),
-                    SizedBox(height: 16),
-                    _buildContactSection(),
-                    SizedBox(height: 32),
-
-                    _buildCreateButton(),
-                    SizedBox(height: 40),
-                  ],
+  Widget _buildNoRightsView() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.block,
+              size: 80,
+              color: _errorColor,
+            ),
+            SizedBox(height: 24),
+            Text(
+              'İlan Hakkınız Bulunmuyor',
+              style: TextStyle(
+                color: _primaryText,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'İlan verebilmek için önce ilan hakkı satın almanız gerekiyor.',
+              style: TextStyle(
+                color: _secondaryText,
+                fontSize: 16,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _goToPurchaseRights,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _blueColor,
+                  foregroundColor: _primaryText,
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  'İlan Hakkı Satın Al',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Geri Dön',
+                style: TextStyle(
+                  color: _accentColor,
+                  fontSize: 16,
                 ),
               ),
             ),
@@ -130,13 +202,71 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: TextStyle(
-        color: _primaryText,
-        fontSize: 20,
-        fontWeight: FontWeight.bold,
+  Widget _buildCreateListingForm() {
+    return Form(
+      key: _formKey,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildRightsInfoCard(),
+            SizedBox(height: 20),
+            _buildBasicInfoSection(),
+            SizedBox(height: 20),
+            _buildLocationSection(),
+            SizedBox(height: 20),
+            _buildImagesSection(),
+            SizedBox(height: 32),
+            _buildCreateButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRightsInfoCard() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _greenColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _greenColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, color: _greenColor, size: 24),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'İlan hakkınız mevcut',
+                  style: TextStyle(
+                    color: _primaryText,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Kalan hak: $_availableRights ilan',
+                  style: TextStyle(
+                    color: _secondaryText,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _goToPurchaseRights,
+            child: Text(
+              'Daha Fazla Al',
+              style: TextStyle(color: _greenColor),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -184,11 +314,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               Expanded(
                 child: _buildTextFormField(
                   controller: _priceController,
-                  label: 'Fiyat (₺)',
-                  hint: '0',
-                  keyboardType: TextInputType.number,
+                  label: 'Fiyat (EUR)',
+                  hint: '0.00',
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
+                    if (value == null || value.isEmpty) {
                       return 'Fiyat gereklidir';
                     }
                     final price = double.tryParse(value);
@@ -208,14 +338,32 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             controller: _descriptionController,
             label: 'Açıklama',
             hint: 'Ürününüz hakkında detaylı bilgi verin',
-            maxLines: 5,
-            maxLength: 2000,
+            maxLines: 4,
+            maxLength: 1000,
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'Açıklama gereklidir';
               }
-              if (value.trim().length < 20) {
-                return 'Açıklama en az 20 karakter olmalıdır';
+              if (value.trim().length < 10) {
+                return 'Açıklama en az 10 karakter olmalıdır';
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: 16),
+
+          // Telefon
+          _buildTextFormField(
+            controller: _phoneController,
+            label: 'Telefon Numarası',
+            hint: '+90 5XX XXX XX XX',
+            keyboardType: TextInputType.phone,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Telefon numarası gereklidir';
+              }
+              if (value.trim().length < 10) {
+                return 'Geçerli bir telefon numarası girin';
               }
               return null;
             },
@@ -234,7 +382,18 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         border: Border.all(color: _borderColor),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            'Konum Bilgileri',
+            style: TextStyle(
+              color: _primaryText,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: 16),
+
           // İl ve İlçe
           Row(
             children: [
@@ -242,63 +401,46 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 child: _buildDropdownField(
                   label: 'İl',
                   value: _selectedProvince.isEmpty ? null : _selectedProvince,
-                  hint: 'İl seçin',
                   items: _availableProvinces,
+                  hint: 'İl seçin',
                   onChanged: (value) {
                     setState(() {
                       _selectedProvince = value!;
-                      _selectedDistrict = ''; // İl değiştiğinde ilçeyi sıfırla
+                      _selectedDistrict = '';
                     });
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'İl seçimi gereklidir';
-                    }
-                    return null;
                   },
                 ),
               ),
               SizedBox(width: 16),
               Expanded(
-                child: AbsorbPointer(
-                  absorbing: _selectedProvince.isEmpty,
-                  child: _buildDropdownField(
-                    label: 'İlçe',
-                    value: _selectedDistrict.isEmpty ? null : _selectedDistrict,
-                    hint: 'İlçe seçin',
-                    items: _availableDistricts,
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedDistrict = value ?? '';
-                      });
-                    },
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'İlçe seçimi gereklidir';
-                      }
-                      return null;
-                    },
-                  ),
+                child: _buildDropdownField(
+                  label: 'İlçe',
+                  value: _selectedDistrict.isEmpty ? null : _selectedDistrict,
+                  items: _availableDistricts,
+                  hint: 'İlçe seçin',
+                  onChanged: _selectedProvince.isEmpty
+                      ? null
+                      : (value) => setState(() => _selectedDistrict = value!),
                 ),
               ),
             ],
           ),
           SizedBox(height: 16),
 
-          // Detaylı adres (opsiyonel)
+          // Tam Adres
           _buildTextFormField(
             controller: _addressController,
-            label: 'Detaylı Adres (Opsiyonel)',
-            hint: 'Mahalle, sokak, bina no vb.',
-            maxLines: 2,
-            maxLength: 200,
+            label: 'Tam Adres (Opsiyonel)',
+            hint: 'Mahalle, sokak, no...',
+            maxLines: 3,
+            maxLength: 300,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildImageSection() {
+  Widget _buildImagesSection() {
     return Container(
       padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -307,35 +449,54 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         border: Border.all(color: _borderColor),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Görseller (${_selectedImages.length}/5)',
+                style: TextStyle(
+                  color: _primaryText,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                onPressed: _pickImages,
+                icon: Icon(Icons.add_photo_alternate, color: _blueColor),
+                style: IconButton.styleFrom(
+                  backgroundColor: _blueColor.withOpacity(0.1),
+                  shape: CircleBorder(),
+                ),
+              ),
+            ],
+          ),
+
           if (_selectedImages.isEmpty) ...[
-            // Görsel yok durumu
+            SizedBox(height: 16),
             Container(
               height: 120,
+              width: double.infinity,
               decoration: BoxDecoration(
                 color: _surfaceColor,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: _borderColor, style: BorderStyle.solid),
               ),
-              child: InkWell(
-                onTap: _pickImages,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.add_photo_alternate, size: 32, color: _tertiaryText),
-                      SizedBox(height: 8),
-                      Text(
-                        'Görsel Ekle',
-                        style: TextStyle(color: _tertiaryText, fontSize: 14),
-                      ),
-                    ],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.image, size: 48, color: _tertiaryText),
+                  SizedBox(height: 8),
+                  Text(
+                    'Görsel eklemek için + butonuna basın',
+                    style: TextStyle(color: _tertiaryText),
                   ),
-                ),
+                ],
               ),
             ),
           ] else ...[
-            // Seçilen görseller
+            SizedBox(height: 16),
             GridView.builder(
               shrinkWrap: true,
               physics: NeverScrollableScrollPhysics(),
@@ -344,27 +505,13 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
               ),
-              itemCount: _selectedImages.length + 1,
+              itemCount: _selectedImages.length,
               itemBuilder: (context, index) {
-                if (index == _selectedImages.length) {
-                  // Yeni görsel ekleme butonu
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: _surfaceColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: _borderColor),
-                    ),
-                    child: InkWell(
-                      onTap: _pickImages,
-                      child: Icon(Icons.add, color: _tertiaryText, size: 24),
-                    ),
-                  );
-                }
-
-                // Seçilen görsel
                 return Stack(
                   children: [
                     Container(
+                      width: double.infinity,
+                      height: double.infinity,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: _borderColor),
@@ -374,19 +521,15 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         child: Image.file(
                           _selectedImages[index],
                           fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
                         ),
                       ),
                     ),
-                    // Silme butonu
                     Positioned(
                       top: 4,
                       right: 4,
-                      child: InkWell(
+                      child: GestureDetector(
                         onTap: () => _removeImage(index),
                         child: Container(
-                          padding: EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             color: _errorColor,
                             shape: BoxShape.circle,
@@ -394,7 +537,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                           child: Icon(
                             Icons.close,
                             color: _primaryText,
-                            size: 16,
+                            size: 20,
                           ),
                         ),
                       ),
@@ -404,40 +547,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               },
             ),
           ],
-          SizedBox(height: 12),
-          Text(
-            'En fazla 5 görsel ekleyebilirsiniz',
-            style: TextStyle(color: _tertiaryText, fontSize: 12),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildContactSection() {
-    return Container(
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderColor),
-      ),
-      child: _buildTextFormField(
-        controller: _phoneController,
-        label: 'Telefon Numarası',
-        hint: '0500 000 00 00',
-        keyboardType: TextInputType.phone,
-        validator: (value) {
-          if (value == null || value.trim().isEmpty) {
-            return 'Telefon numarası gereklidir';
-          }
-          // Basit telefon numarası validasyonu
-          final cleaned = value.replaceAll(RegExp(r'[^\d]'), '');
-          if (cleaned.length < 10) {
-            return 'Geçerli bir telefon numarası girin';
-          }
-          return null;
-        },
       ),
     );
   }
@@ -458,8 +568,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           label,
           style: TextStyle(
             color: _primaryText,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
           ),
         ),
         SizedBox(height: 8),
@@ -485,13 +595,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _accentColor),
+              borderSide: BorderSide(color: _blueColor),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: _errorColor),
             ),
             contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            counterStyle: TextStyle(color: _tertiaryText),
           ),
         ),
       ],
@@ -500,12 +611,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   Widget _buildDropdownField({
     required String label,
+    required List<String> items,
     String? value,
     String? hint,
-    required List<String> items,
-    required Function(String?) onChanged,
-    String? Function(String?)? validator,
+    ValueChanged<String?>? onChanged,
   }) {
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -513,17 +624,29 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           label,
           style: TextStyle(
             color: _primaryText,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
           ),
         ),
         SizedBox(height: 8),
         DropdownButtonFormField<String>(
           value: value,
-          hint: hint != null ? Text(hint, style: TextStyle(color: _tertiaryText)) : null,
-          validator: validator,
-          dropdownColor: _cardColor,
+          hint: Text(
+            hint ?? 'Seçin',
+            style: TextStyle(color: _tertiaryText),
+          ),
+          items: items.map((item) {
+            return DropdownMenuItem<String>(
+              value: item,
+              child: Text(
+                item,
+                style: TextStyle(color: _primaryText),
+              ),
+            );
+          }).toList(),
+          onChanged: onChanged,
           style: TextStyle(color: _primaryText),
+          dropdownColor: _surfaceColor,
           decoration: InputDecoration(
             filled: true,
             fillColor: _surfaceColor,
@@ -537,34 +660,34 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _accentColor),
+              borderSide: BorderSide(color: _blueColor),
             ),
             contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
-          items: items.map((item) {
-            return DropdownMenuItem(
-              value: item,
-              child: Text(item, style: TextStyle(color: _primaryText)),
-            );
-          }).toList(),
-          onChanged: onChanged,
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return '$label seçimi gereklidir';
+            }
+            return null;
+          },
         ),
       ],
     );
   }
 
   Widget _buildCreateButton() {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: 56,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _createListing,
         style: ElevatedButton.styleFrom(
           backgroundColor: _greenColor,
-          disabledBackgroundColor: _accentColor.withOpacity(0.3),
+          foregroundColor: _primaryText,
+          padding: EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
           ),
+          elevation: 0,
         ),
         child: _isLoading
             ? CircularProgressIndicator(
@@ -581,6 +704,60 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _checkUserRights() async {
+    try {
+      setState(() => _isCheckingRights = true);
+
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString('auth_token');
+
+      if (authToken == null) {
+        _showMessage('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
+        Navigator.pop(context);
+        return;
+      }
+
+      final response = await _dio.get(
+        '${UrlConstants.apiBaseUrl}/api/store/rights',
+        options: Options(
+          headers: {'Authorization': 'Bearer $authToken'},
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data['success']) {
+        setState(() {
+          _availableRights = response.data['rights']['availableRights'] ?? 0;
+        });
+      } else {
+        _showMessage('İlan hakları kontrol edilemedi');
+      }
+    } catch (e) {
+      print('Rights kontrol hatası: $e');
+      _showMessage('İlan hakları kontrol edilirken hata oluştu');
+    } finally {
+      setState(() => _isCheckingRights = false);
+    }
+  }
+
+  Future<void> _goToPurchaseRights() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PurchaseRightsScreen(
+          onPurchaseCompleted: () {
+            // Satın alma tamamlandığında hakları yeniden kontrol et
+            _checkUserRights();
+          },
+        ),
+      ),
+    );
+
+    // Eğer satın alma başarılıysa hakları yeniden kontrol et
+    if (result == true) {
+      _checkUserRights();
+    }
   }
 
   Future<void> _pickImages() async {
@@ -613,6 +790,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   Future<void> _createListing() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Province ve district kontrolü
+    if (_selectedProvince.isEmpty || _selectedDistrict.isEmpty) {
+      _showMessage('Lütfen il ve ilçe seçin');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -620,7 +803,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       final authToken = prefs.getString('auth_token');
 
       if (authToken == null) {
-        print(authToken);
         _showMessage('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
         return;
       }
@@ -658,6 +840,13 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        // İlan başarıyla oluşturuldu
+        final remainingRights = response.data['remainingRights'] ?? 0;
+
+        setState(() {
+          _availableRights = remainingRights;
+        });
+
         _showMessage('İlan başarıyla oluşturuldu!', isSuccess: true);
         widget.onListingCreated();
         Navigator.pop(context);
@@ -666,12 +855,16 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       }
     } catch (e) {
       if (e is DioException) {
-        if (e.response?.statusCode == 403) {
+        final responseData = e.response?.data;
+
+        if (e.response?.statusCode == 403 && responseData?['needToPurchase'] == true) {
+          // İlan hakkı yok - satın alma sayfasına yönlendir
           _showMessage('İlan hakkınız bulunmuyor. Lütfen ilan hakkı satın alın.');
+          _goToPurchaseRights();
         } else if (e.response?.statusCode == 401) {
           _showMessage('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
         } else {
-          _showMessage(e.response?.data['message'] ?? 'İlan oluşturulurken hata oluştu');
+          _showMessage(responseData?['message'] ?? 'İlan oluşturulurken hata oluştu');
         }
       } else {
         _showMessage('İlan oluşturulurken hata oluştu: $e');
