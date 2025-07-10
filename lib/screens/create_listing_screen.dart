@@ -1,4 +1,4 @@
-// lib/screens/create_listing_screen.dart - GÜNCELLENMİŞ - İlan Hakkı Kontrolü ile
+// lib/screens/create_listing_screen.dart - GÜNCELLENMİŞ - Turkey Cities Helper ile
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../url_constants.dart';
+import '../helpers/turkey_cities_helper.dart';
 import 'purchase_rights_screen.dart';
 
 class CreateListingScreen extends StatefulWidget {
@@ -30,7 +31,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final TextEditingController _addressController = TextEditingController();
 
   // Form state
-  String _selectedCategory = 'Elektronik';
+  String _selectedCategory = 'ses-kartlari'; // Slug olarak başlat
   String _selectedProvince = '';
   String _selectedDistrict = '';
   List<File> _selectedImages = [];
@@ -38,26 +39,48 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   bool _isCheckingRights = true;
   int _availableRights = 0;
 
-  // Dropdown options
-  final List<String> _categories = [
-    'Elektronik', 'Giyim', 'Ev & Yaşam', 'Spor',
-    'Kitap', 'Oyun', 'Müzik Aleti', 'Diğer'
-  ];
-
-  final Map<String, List<String>> _provincesAndDistricts = {
-    'İstanbul': ['Ataşehir', 'Kadıköy', 'Beşiktaş', 'Şişli', 'Bakırköy', 'Beyoğlu', 'Fatih', 'Üsküdar'],
-    'Ankara': ['Çankaya', 'Keçiören', 'Yenimahalle', 'Mamak', 'Sincan', 'Etimesgut', 'Altındağ'],
-    'İzmir': ['Konak', 'Bornova', 'Karşıyaka', 'Buca', 'Bayraklı', 'Gaziemir', 'Balçova'],
-    'Bursa': ['Osmangazi', 'Nilüfer', 'Yıldırım', 'Gemlik', 'İnegöl', 'Mudanya'],
-    'Antalya': ['Muratpaşa', 'Kepez', 'Konyaaltı', 'Aksu', 'Döşemealtı', 'Manavgat', 'Alanya'],
-    'Adana': ['Seyhan', 'Yüreğir', 'Çukurova', 'Sarıçam', 'Karaisalı'],
-    'Konya': ['Meram', 'Karatay', 'Selçuklu', 'Ereğli', 'Akşehir'],
-    'Samsun': ['İlkadım', 'Atakum', 'Canik', 'Tekkeköy', 'Bafra', 'Çarşamba', 'Vezirköprü'],
+  // Kategori mappings - Slug ve display name
+  final Map<String, String> _categoryMappings = {
+    'ses-kartlari': 'Ses Kartları',
+    'monitorler': 'Monitörler',
+    'midi-klavyeler': 'Midi Klavyeler',
+    'kayit-setleri': 'Kayıt Setleri',
+    'produksiyon-bilgisayarlari': 'Prodüksiyon Bilgisayarları',
+    'dj-ekipmanlari': 'DJ Ekipmanları',
+    'produksiyon-kontrol-cihazlari': 'Prodüksiyon Kontrol Cihazları',
+    'gaming-podcast-ekipmanlari': 'Gaming ve Podcast Ekipmanları',
+    'mikrofonlar': 'Mikrofonlar',
+    'kulakliklar': 'Kulaklıklar',
+    'studyo-dj-ekipmanlari': 'Stüdyo/DJ Ekipmanları',
+    'kablolar': 'Kablolar',
+    'arabirimler': 'Arabirimler',
+    'kayit-cihazlari': 'Kayıt Cihazları',
+    'pre-amfiler-efektler': 'Pre-Amfiler/Efektler',
+    'yazilimlar': 'Yazılımlar',
   };
 
-  List<String> get _availableProvinces => _provincesAndDistricts.keys.toList();
+  // Helper methods for categories
+  List<String> get _categoryDisplayNames => _categoryMappings.values.toList();
+
+  List<String> get _categorySlugs => _categoryMappings.keys.toList();
+
+  String _getSlugFromDisplayName(String displayName) {
+    return _categoryMappings.entries
+        .firstWhere((entry) => entry.value == displayName,
+        orElse: () => MapEntry('ses-kartlari', 'Ses Kartları'))
+        .key;
+  }
+
+  String _getDisplayNameFromSlug(String slug) {
+    return _categoryMappings[slug] ?? 'Ses Kartları';
+  }
+
+  // Turkey Cities Helper kullanımı
+  List<String> get _availableProvinces => TurkeyCitiesHelper.allProvinces;
+
   List<String> get _availableDistricts =>
-      _selectedProvince.isEmpty ? [] : _provincesAndDistricts[_selectedProvince] ?? [];
+      _selectedProvince.isEmpty ? [] : TurkeyCitiesHelper.getDistricts(
+          _selectedProvince);
 
   // Modern Dark Theme Colors
   final Color _backgroundColor = Color(0xFF0F0F0F);
@@ -76,7 +99,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   @override
   void initState() {
     super.initState();
-    _checkUserRights();
+    _checkListingRights();
   }
 
   @override
@@ -91,6 +114,27 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingRights) {
+      return Scaffold(
+        backgroundColor: _backgroundColor,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(_blueColor),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'İlan hakları kontrol ediliyor...',
+                style: TextStyle(color: _secondaryText),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
@@ -99,17 +143,35 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         elevation: 0,
         iconTheme: IconThemeData(color: _primaryText),
         actions: [
-          Padding(
-            padding: EdgeInsets.only(right: 16),
+          // İlan hakkı göstergesi
+          Container(
+            margin: EdgeInsets.only(right: 16),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _availableRights > 0
+                  ? _greenColor.withOpacity(0.1)
+                  : _errorColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _availableRights > 0
+                    ? _greenColor.withOpacity(0.3)
+                    : _errorColor.withOpacity(0.3),
+              ),
+            ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.account_balance_wallet, color: _accentColor, size: 20),
-                SizedBox(width: 4),
+                Icon(
+                    Icons.account_balance_wallet,
+                    color: _availableRights > 0 ? _greenColor : _errorColor,
+                    size: 16
+                ),
+                SizedBox(width: 6),
                 Text(
-                  '$_availableRights',
+                  '$_availableRights hak',
                   style: TextStyle(
                     color: _availableRights > 0 ? _greenColor : _errorColor,
-                    fontSize: 16,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -118,139 +180,69 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           ),
         ],
       ),
-      body: _isCheckingRights
-          ? Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(_blueColor),
-        ),
-      )
-          : _availableRights <= 0
-          ? _buildNoRightsView()
-          : _buildCreateListingForm(),
-    );
-  }
-
-  Widget _buildNoRightsView() {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.block,
-              size: 80,
-              color: _errorColor,
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(16),
+            physics: ClampingScrollPhysics(),
+            child: Column(
+              children: [
+                _buildRightsCard(),
+                SizedBox(height: 16),
+                _buildBasicInfoSection(),
+                SizedBox(height: 16),
+                _buildLocationSection(),
+                SizedBox(height: 16),
+                _buildImagesSection(),
+                SizedBox(height: 16),
+                _buildContactSection(),
+                SizedBox(height: 24),
+                _buildSubmitButton(),
+                SizedBox(height: 32),
+              ],
             ),
-            SizedBox(height: 24),
-            Text(
-              'İlan Hakkınız Bulunmuyor',
-              style: TextStyle(
-                color: _primaryText,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'İlan verebilmek için önce ilan hakkı satın almanız gerekiyor.',
-              style: TextStyle(
-                color: _secondaryText,
-                fontSize: 16,
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _goToPurchaseRights,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _blueColor,
-                  foregroundColor: _primaryText,
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                child: Text(
-                  'İlan Hakkı Satın Al',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: 16),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Geri Dön',
-                style: TextStyle(
-                  color: _accentColor,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildCreateListingForm() {
-    return Form(
-      key: _formKey,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildRightsInfoCard(),
-            SizedBox(height: 20),
-            _buildBasicInfoSection(),
-            SizedBox(height: 20),
-            _buildLocationSection(),
-            SizedBox(height: 20),
-            _buildImagesSection(),
-            SizedBox(height: 32),
-            _buildCreateButton(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRightsInfoCard() {
+  Widget _buildRightsCard() {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _greenColor.withOpacity(0.1),
+        color: _cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _greenColor.withOpacity(0.3)),
+        border: Border.all(color: _borderColor),
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle, color: _greenColor, size: 24),
+          Icon(
+            Icons.info_outline,
+            color: _availableRights > 0 ? _greenColor : _orangeColor,
+            size: 24,
+          ),
           SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'İlan hakkınız mevcut',
+                  _availableRights > 0
+                      ? 'İlan Hakkınız Mevcut'
+                      : 'İlan Hakkı Gerekli',
                   style: TextStyle(
                     color: _primaryText,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                SizedBox(height: 4),
                 Text(
-                  'Kalan hak: $_availableRights ilan',
+                  _availableRights > 0
+                      ? 'Kalan hakkınız: $_availableRights'
+                      : 'İlan verebilmek için hak satın almalısınız',
                   style: TextStyle(
                     color: _secondaryText,
                     fontSize: 14,
@@ -259,13 +251,15 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               ],
             ),
           ),
-          TextButton(
-            onPressed: _goToPurchaseRights,
-            child: Text(
-              'Daha Fazla Al',
-              style: TextStyle(color: _greenColor),
+          if (_availableRights == 0) ...[
+            TextButton(
+              onPressed: _goToPurchaseRights,
+              child: Text(
+                'Satın Al',
+                style: TextStyle(color: _greenColor),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -288,10 +282,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             hint: 'Ürününüzün başlığını yazın',
             maxLength: 200,
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
+              if (value == null || value
+                  .trim()
+                  .isEmpty) {
                 return 'Başlık gereklidir';
               }
-              if (value.trim().length < 5) {
+              if (value
+                  .trim()
+                  .length < 5) {
                 return 'Başlık en az 5 karakter olmalıdır';
               }
               return null;
@@ -299,37 +297,28 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           ),
           SizedBox(height: 16),
 
-          // Kategori ve Fiyat
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdownField(
-                  label: 'Kategori',
-                  value: _selectedCategory,
-                  items: _categories,
-                  onChanged: (value) => setState(() => _selectedCategory = value!),
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: _buildTextFormField(
-                  controller: _priceController,
-                  label: 'Fiyat (EUR)',
-                  hint: '0.00',
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Fiyat gereklidir';
-                    }
-                    final price = double.tryParse(value);
-                    if (price == null || price < 0) {
-                      return 'Geçerli bir fiyat girin';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
+          // Kategori
+          _buildCategoryDropdown(),
+          SizedBox(height: 16),
+
+          // Fiyat
+          _buildTextFormField(
+            controller: _priceController,
+            label: 'Fiyat (TL)',
+            hint: '0',
+            keyboardType: TextInputType.number,
+            validator: (value) {
+              if (value == null || value
+                  .trim()
+                  .isEmpty) {
+                return 'Fiyat gereklidir';
+              }
+              final price = double.tryParse(value.trim());
+              if (price == null || price < 0) {
+                return 'Geçerli bir fiyat girin';
+              }
+              return null;
+            },
           ),
           SizedBox(height: 16),
 
@@ -337,39 +326,102 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           _buildTextFormField(
             controller: _descriptionController,
             label: 'Açıklama',
-            hint: 'Ürününüz hakkında detaylı bilgi verin',
-            maxLines: 4,
-            maxLength: 1000,
+            hint: 'Ürününüzü detaylı olarak anlatın',
+            maxLines: 5,
+            maxLength: 2000,
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
+              if (value == null || value
+                  .trim()
+                  .isEmpty) {
                 return 'Açıklama gereklidir';
               }
-              if (value.trim().length < 10) {
-                return 'Açıklama en az 10 karakter olmalıdır';
-              }
-              return null;
-            },
-          ),
-          SizedBox(height: 16),
-
-          // Telefon
-          _buildTextFormField(
-            controller: _phoneController,
-            label: 'Telefon Numarası',
-            hint: '+90 5XX XXX XX XX',
-            keyboardType: TextInputType.phone,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Telefon numarası gereklidir';
-              }
-              if (value.trim().length < 10) {
-                return 'Geçerli bir telefon numarası girin';
+              if (value
+                  .trim()
+                  .length < 20) {
+                return 'Açıklama en az 20 karakter olmalıdır';
               }
               return null;
             },
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCategoryDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Kategori',
+          style: TextStyle(
+            color: _primaryText,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: 8),
+        Theme(
+          data: Theme.of(context).copyWith(
+            // Dropdown hint text color fix
+            inputDecorationTheme: InputDecorationTheme(
+              hintStyle: TextStyle(color: _primaryText.withOpacity(0.7)),
+            ),
+          ),
+          child: DropdownButtonFormField<String>(
+            value: _selectedCategory,
+            decoration: InputDecoration(
+              hintText: 'Kategori seçin',
+              hintStyle: TextStyle(color: _primaryText.withOpacity(0.7)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _borderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _borderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _blueColor),
+              ),
+              filled: true,
+              fillColor: _surfaceColor,
+              contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
+            ),
+            dropdownColor: _cardColor,
+            style: TextStyle(color: _primaryText),
+            menuMaxHeight: MediaQuery
+                .of(context)
+                .size
+                .height * 0.3,
+            icon: Icon(Icons.keyboard_arrow_down, color: _primaryText),
+            items: _categorySlugs.map((slug) {
+              final displayName = _getDisplayNameFromSlug(slug);
+              return DropdownMenuItem(
+                value: slug,
+                child: Text(
+                  displayName,
+                  style: TextStyle(fontSize: 14, color: _primaryText),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedCategory = value!;
+              });
+            },
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Kategori seçimi gereklidir';
+              }
+              return null;
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -382,48 +434,31 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         border: Border.all(color: _borderColor),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Konum Bilgileri',
-            style: TextStyle(
-              color: _primaryText,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          // İl Dropdown
+          _buildDropdownField(
+            label: 'İl',
+            value: _selectedProvince.isEmpty ? null : _selectedProvince,
+            items: _availableProvinces,
+            hint: 'İl seçin',
+            onChanged: (value) {
+              setState(() {
+                _selectedProvince = value!;
+                _selectedDistrict = '';
+              });
+            },
           ),
           SizedBox(height: 16),
 
-          // İl ve İlçe
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdownField(
-                  label: 'İl',
-                  value: _selectedProvince.isEmpty ? null : _selectedProvince,
-                  items: _availableProvinces,
-                  hint: 'İl seçin',
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedProvince = value!;
-                      _selectedDistrict = '';
-                    });
-                  },
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: _buildDropdownField(
-                  label: 'İlçe',
-                  value: _selectedDistrict.isEmpty ? null : _selectedDistrict,
-                  items: _availableDistricts,
-                  hint: 'İlçe seçin',
-                  onChanged: _selectedProvince.isEmpty
-                      ? null
-                      : (value) => setState(() => _selectedDistrict = value!),
-                ),
-              ),
-            ],
+          // İlçe Dropdown
+          _buildDropdownField(
+            label: 'İlçe',
+            value: _selectedDistrict.isEmpty ? null : _selectedDistrict,
+            items: _availableDistricts,
+            hint: 'İlçe seçin',
+            onChanged: _selectedProvince.isEmpty
+                ? null
+                : (value) => setState(() => _selectedDistrict = value!),
           ),
           SizedBox(height: 16),
 
@@ -464,38 +499,16 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               ),
               IconButton(
                 onPressed: _pickImages,
-                icon: Icon(Icons.add_photo_alternate, color: _blueColor),
+                icon: Icon(Icons.add_photo_alternate, color: _primaryText),
                 style: IconButton.styleFrom(
-                  backgroundColor: _blueColor.withOpacity(0.1),
+                  backgroundColor: Color(0xFF6B7280), // Gri ton
                   shape: CircleBorder(),
                 ),
               ),
             ],
           ),
 
-          if (_selectedImages.isEmpty) ...[
-            SizedBox(height: 16),
-            Container(
-              height: 120,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: _surfaceColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _borderColor, style: BorderStyle.solid),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.image, size: 48, color: _tertiaryText),
-                  SizedBox(height: 8),
-                  Text(
-                    'Görsel eklemek için + butonuna basın',
-                    style: TextStyle(color: _tertiaryText),
-                  ),
-                ],
-              ),
-            ),
-          ] else ...[
+          if (_selectedImages.isNotEmpty) ...[
             SizedBox(height: 16),
             GridView.builder(
               shrinkWrap: true,
@@ -504,6 +517,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 crossAxisCount: 3,
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
+                childAspectRatio: 1.0,
               ),
               itemCount: _selectedImages.length,
               itemBuilder: (context, index) {
@@ -532,12 +546,13 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: _errorColor,
-                            shape: BoxShape.circle,
+                            borderRadius: BorderRadius.circular(12),
                           ),
+                          padding: EdgeInsets.all(4),
                           child: Icon(
                             Icons.close,
                             color: _primaryText,
-                            size: 20,
+                            size: 16,
                           ),
                         ),
                       ),
@@ -546,8 +561,106 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 );
               },
             ),
-          ],
+          ] else
+            ...[
+              SizedBox(height: 16),
+              Container(
+                height: 120,
+                decoration: BoxDecoration(
+                  color: _surfaceColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: _borderColor, style: BorderStyle.solid),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.image, color: _tertiaryText, size: 48),
+                      SizedBox(height: 8),
+                      Text(
+                        'Fotoğraf ekleyin',
+                        style: TextStyle(color: _tertiaryText),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildContactSection() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
+      ),
+      child: _buildTextFormField(
+        controller: _phoneController,
+        label: 'Telefon Numarası',
+        hint: '05xx xxx xx xx',
+        keyboardType: TextInputType.phone,
+        validator: (value) {
+          if (value == null || value
+              .trim()
+              .isEmpty) {
+            return 'Telefon numarası gereklidir';
+          }
+          if (value
+              .trim()
+              .length < 10) {
+            return 'Geçerli bir telefon numarası girin';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: (_isLoading || _availableRights <= 0)
+            ? null
+            : _submitListing,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _availableRights > 0 ? _greenColor : _accentColor,
+          foregroundColor: _primaryText,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 2,
+        ),
+        child: _isLoading
+            ? Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(_primaryText),
+              ),
+            ),
+            SizedBox(width: 12),
+            Text('İlan Oluşturuluyor...'),
+          ],
+        )
+            : Text(
+          _availableRights > 0 ? 'İlanı Yayınla' : 'İlan Hakkı Gerekli',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -556,9 +669,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     required TextEditingController controller,
     required String label,
     String? hint,
+    TextInputType? keyboardType,
     int maxLines = 1,
     int? maxLength,
-    TextInputType? keyboardType,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -568,23 +681,20 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           label,
           style: TextStyle(
             color: _primaryText,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
         SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          style: TextStyle(color: _primaryText),
+          keyboardType: keyboardType,
           maxLines: maxLines,
           maxLength: maxLength,
-          keyboardType: keyboardType,
-          validator: validator,
-          style: TextStyle(color: _primaryText),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: _tertiaryText),
-            filled: true,
-            fillColor: _surfaceColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: _borderColor),
@@ -601,9 +711,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: _errorColor),
             ),
+            filled: true,
+            fillColor: _surfaceColor,
             contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            counterStyle: TextStyle(color: _tertiaryText),
           ),
+          validator: validator,
         ),
       ],
     );
@@ -611,12 +723,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   Widget _buildDropdownField({
     required String label,
+    required String? value,
     required List<String> items,
-    String? value,
-    String? hint,
-    ValueChanged<String?>? onChanged,
+    required String hint,
+    required void Function(String?)? onChanged,
   }) {
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -624,160 +735,180 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           label,
           style: TextStyle(
             color: _primaryText,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
         SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value,
-          hint: Text(
-            hint ?? 'Seçin',
-            style: TextStyle(color: _tertiaryText),
+        Theme(
+          data: Theme.of(context).copyWith(
+            // Dropdown hint text color fix
+            inputDecorationTheme: InputDecorationTheme(
+              hintStyle: TextStyle(color: _primaryText.withOpacity(0.7)),
+            ),
           ),
-          items: items.map((item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(
-                item,
-                style: TextStyle(color: _primaryText),
+          child: DropdownButtonFormField<String>(
+            value: value,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: TextStyle(color: _primaryText.withOpacity(0.7)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _borderColor),
               ),
-            );
-          }).toList(),
-          onChanged: onChanged,
-          style: TextStyle(color: _primaryText),
-          dropdownColor: _surfaceColor,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: _surfaceColor,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _borderColor),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _borderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _blueColor),
+              ),
+              filled: true,
+              fillColor: _surfaceColor,
+              contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _borderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _blueColor),
-            ),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            dropdownColor: _cardColor,
+            style: TextStyle(color: _primaryText),
+            menuMaxHeight: MediaQuery
+                .of(context)
+                .size
+                .height * 0.25,
+            icon: Icon(Icons.keyboard_arrow_down, color: _primaryText),
+            items: items.map((item) {
+              return DropdownMenuItem(
+                value: item,
+                child: Text(
+                  item,
+                  style: TextStyle(fontSize: 14, color: _primaryText),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: onChanged,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return '$label seçimi gereklidir';
+              }
+              return null;
+            },
           ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return '$label seçimi gereklidir';
-            }
-            return null;
-          },
         ),
       ],
     );
   }
 
-  Widget _buildCreateButton() {
-    return Container(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _createListing,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _greenColor,
-          foregroundColor: _primaryText,
-          padding: EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 0,
-        ),
-        child: _isLoading
-            ? CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(_primaryText),
-          strokeWidth: 2,
-        )
-            : Text(
-          'İlan Oluştur',
-          style: TextStyle(
-            color: _primaryText,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
+  Future<void> _checkListingRights() async {
+    setState(() => _isCheckingRights = true);
 
-  Future<void> _checkUserRights() async {
     try {
-      setState(() => _isCheckingRights = true);
-
       final prefs = await SharedPreferences.getInstance();
       final authToken = prefs.getString('auth_token');
 
       if (authToken == null) {
-        _showMessage('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
-        Navigator.pop(context);
+        print('⚠️ Auth token bulunamadı');
+        setState(() {
+          _availableRights = 0;
+          _isCheckingRights = false;
+        });
+        _showMessage('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
         return;
       }
+
+      print('🔍 İlan hakları kontrol ediliyor...');
 
       final response = await _dio.get(
         '${UrlConstants.apiBaseUrl}/api/store/rights',
         options: Options(
           headers: {'Authorization': 'Bearer $authToken'},
+          receiveTimeout: Duration(seconds: 10),
         ),
       );
 
-      if (response.statusCode == 200 && response.data['success']) {
-        setState(() {
-          _availableRights = response.data['rights']['availableRights'] ?? 0;
-        });
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response data: ${response.data}');
+
+      if (response.statusCode == 200) {
+        if (response.data != null && response.data['success'] == true) {
+          final rights = response.data['rights'];
+          setState(() {
+            _availableRights =
+            rights != null ? (rights['availableRights'] ?? 0) : 0;
+            _isCheckingRights = false;
+          });
+          print('✅ İlan hakları başarıyla yüklendi: $_availableRights');
+        } else {
+          throw Exception('API yanıtı başarısız: ${response.data?['message'] ??
+              'Bilinmeyen hata'}');
+        }
       } else {
-        _showMessage('İlan hakları kontrol edilemedi');
+        throw Exception('HTTP Error: ${response.statusCode}');
       }
     } catch (e) {
-      print('Rights kontrol hatası: $e');
-      _showMessage('İlan hakları kontrol edilirken hata oluştu');
-    } finally {
-      setState(() => _isCheckingRights = false);
+      print('❌ Rights check error: $e');
+      setState(() {
+        _availableRights = 0;
+        _isCheckingRights = false;
+      });
+
+      String errorMessage = 'İlan hakları kontrol edilirken hata oluştu.';
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('TimeoutException')) {
+        errorMessage = 'İnternet bağlantınızı kontrol edin.';
+      } else if (e.toString().contains('401')) {
+        errorMessage = 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.';
+      }
+
+      _showMessage(errorMessage);
     }
   }
 
-  Future<void> _goToPurchaseRights() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PurchaseRightsScreen(
-          onPurchaseCompleted: () {
-            // Satın alma tamamlandığında hakları yeniden kontrol et
-            _checkUserRights();
-          },
-        ),
-      ),
-    );
+  void _showMessage(String message, {bool isError = true}) {
+    // Widget'ın hala aktif olup olmadığını kontrol et
+    if (!mounted || !context.mounted) return;
 
-    // Eğer satın alma başarılıysa hakları yeniden kontrol et
-    if (result == true) {
-      _checkUserRights();
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: TextStyle(color: _primaryText),
+          ),
+          backgroundColor: isError ? _errorColor : _greenColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          margin: EdgeInsets.all(16),
+          duration: Duration(seconds: 3), // Kısa süre
+        ),
+      );
+    } catch (e) {
+      // Eğer ScaffoldMessenger bulunamazsa sessizce hata ver
+      print('⚠️ Cannot show snackbar: $e');
     }
   }
 
   Future<void> _pickImages() async {
     if (_selectedImages.length >= 5) {
-      _showMessage('En fazla 5 görsel ekleyebilirsiniz');
+      _showMessage('Maksimum 5 fotoğraf ekleyebilirsiniz.');
       return;
     }
 
-    try {
-      final List<XFile>? images = await _picker.pickMultiImage();
-      if (images != null) {
-        final remainingSlots = 5 - _selectedImages.length;
-        final imagesToAdd = images.take(remainingSlots);
+    final remainingSlots = 5 - _selectedImages.length;
+    final List<XFile>? images = await _picker.pickMultiImage();
 
-        setState(() {
-          _selectedImages.addAll(imagesToAdd.map((image) => File(image.path)));
-        });
+    if (images != null) {
+      final imagesToAdd = images.take(remainingSlots).toList();
+
+      setState(() {
+        _selectedImages.addAll(imagesToAdd.map((xfile) => File(xfile.path)));
+      });
+
+      if (images.length > remainingSlots) {
+        _showMessage('Sadece $remainingSlots fotoğraf daha ekleyebilirsiniz.');
       }
-    } catch (e) {
-      _showMessage('Görsel seçme hatası: $e');
     }
   }
 
@@ -787,12 +918,23 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     });
   }
 
-  Future<void> _createListing() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _submitListing() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    // Province ve district kontrolü
-    if (_selectedProvince.isEmpty || _selectedDistrict.isEmpty) {
-      _showMessage('Lütfen il ve ilçe seçin');
+    if (_availableRights <= 0) {
+      _showMessage('İlan verebilmek için önce hak satın almanız gerekiyor.');
+      return;
+    }
+
+    if (_selectedProvince.isEmpty) {
+      _showMessage('Lütfen il seçin.');
+      return;
+    }
+
+    if (_selectedDistrict.isEmpty) {
+      _showMessage('Lütfen ilçe seçin.');
       return;
     }
 
@@ -803,71 +945,75 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       final authToken = prefs.getString('auth_token');
 
       if (authToken == null) {
-        _showMessage('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
-        return;
+        throw Exception('Oturum bulunamadı');
       }
 
-      FormData formData = FormData.fromMap({
+      // FormData oluştur
+      final formData = FormData.fromMap({
         'title': _titleController.text.trim(),
+        'category': _selectedCategory, // Slug gönder
+        'price': double.parse(_priceController.text.trim()),
         'description': _descriptionController.text.trim(),
-        'category': _selectedCategory,
-        'price': _priceController.text.trim(),
         'phoneNumber': _phoneController.text.trim(),
         'province': _selectedProvince,
         'district': _selectedDistrict,
         'fullAddress': _addressController.text.trim(),
       });
 
-      // Görselleri ekle
+      // Resimleri ekle
       for (int i = 0; i < _selectedImages.length; i++) {
         formData.files.add(
           MapEntry(
             'images',
             await MultipartFile.fromFile(
               _selectedImages[i].path,
-              filename: 'image_$i.jpg',
+              filename: 'listing_image_$i.jpg',
             ),
           ),
         );
       }
 
+      print('🚀 Submitting to: ${UrlConstants
+          .apiBaseUrl}/api/store/listings'); // Debug için
+      print('📦 FormData: ${formData.fields}'); // Debug için
+
       final response = await _dio.post(
         '${UrlConstants.apiBaseUrl}/api/store/listings',
+        // /create yerine /listings
         data: formData,
         options: Options(
-          headers: {'Authorization': 'Bearer $authToken'},
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'multipart/form-data',
+          },
         ),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // İlan başarıyla oluşturuldu
-        final remainingRights = response.data['remainingRights'] ?? 0;
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response data: ${response.data}');
 
-        setState(() {
-          _availableRights = remainingRights;
-        });
-
-        _showMessage('İlan başarıyla oluşturuldu!', isSuccess: true);
-        widget.onListingCreated();
-        Navigator.pop(context);
-      } else {
-        _showMessage(response.data['message'] ?? 'İlan oluşturulamadı');
-      }
-    } catch (e) {
-      if (e is DioException) {
-        final responseData = e.response?.data;
-
-        if (e.response?.statusCode == 403 && responseData?['needToPurchase'] == true) {
-          // İlan hakkı yok - satın alma sayfasına yönlendir
-          _showMessage('İlan hakkınız bulunmuyor. Lütfen ilan hakkı satın alın.');
-          _goToPurchaseRights();
-        } else if (e.response?.statusCode == 401) {
-          _showMessage('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
-        } else {
-          _showMessage(responseData?['message'] ?? 'İlan oluşturulurken hata oluştu');
+      if (response.statusCode == 201 && response.data['success']) {
+        if (mounted) { // Widget hala aktif mi kontrol et
+          _showMessage('İlan başarıyla oluşturuldu!', isError: false);
+          widget.onListingCreated(); // Parent widget'ı bilgilendir
+          Navigator.pop(context, true);
         }
       } else {
-        _showMessage('İlan oluşturulurken hata oluştu: $e');
+        throw Exception(response.data['message'] ?? 'İlan oluşturulamadı');
+      }
+    } catch (e) {
+      print('❌ Create listing error: $e');
+      if (mounted) { // Widget hala aktif mi kontrol et
+        if (e.toString().contains('404')) {
+          _showMessage(
+              'API endpoint bulunamadı. Lütfen geliştirici ile iletişime geçin.');
+        } else if (e.toString().contains('401')) {
+          _showMessage('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.');
+        } else if (e.toString().contains('403')) {
+          _showMessage('Bu işlem için yetkiniz yok.');
+        } else {
+          _showMessage('İlan oluşturulurken hata oluştu: ${e.toString()}');
+        }
       }
     } finally {
       if (mounted) {
@@ -876,22 +1022,24 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     }
   }
 
-  void _showMessage(String message, {bool isSuccess = false}) {
-    if (!mounted) return;
+  Future<void> _goToPurchaseRights() async {
+    Future<void> _goToPurchaseRights() async {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              PurchaseRightsScreen(
+                onPurchaseCompleted: () {
+                  _checkListingRights(); // Hakları yeniden kontrol et
+                },
+              ),
+        ),
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: TextStyle(color: _primaryText),
-        ),
-        backgroundColor: isSuccess ? _greenColor : _errorColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        margin: EdgeInsets.all(16),
-      ),
-    );
+      // Eğer satın alma başarılıysa hakları yeniden kontrol et
+      if (result == true) {
+        await _checkListingRights();
+      }
+    }
   }
 }

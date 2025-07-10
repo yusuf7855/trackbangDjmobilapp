@@ -1,4 +1,4 @@
-// lib/menu/magaza_screen.dart - TAM VE HATASIZ VERSİYON
+// lib/menu/magaza_screen.dart - SLUG KATEGORİLER İLE GÜNCELLENMİŞ VERSİYON
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -7,6 +7,7 @@ import '../screens/create_listing_screen.dart';
 import '../screens/listing_detail_screen.dart';
 import '../screens/purchase_rights_screen.dart';
 import '../url_constants.dart';
+import '../helpers/turkey_cities_helper.dart';
 
 class MagazaScreen extends StatefulWidget {
   @override
@@ -23,21 +24,59 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   bool _isLoading = false;
   bool _isLoadingCredits = false;
   String _searchQuery = '';
-  String _selectedCategory = 'Tümü';
+  String _selectedCategory = 'tumu'; // Slug olarak tutuyoruz
   String _priceSort = 'Yeniden Eskiye';
   String _selectedProvince = 'Tüm İller';
   String _selectedDistrict = 'Tüm İlçeler';
+  double _minPrice = 0;
+  double _maxPrice = 50000;
+  String _selectedDateFilter = 'Tümü';
 
-  final List<String> _categories = [
-    'Tümü', 'Elektronik', 'Giyim', 'Ev & Yaşam',
-    'Spor', 'Kitap', 'Oyun', 'Müzik Aleti', 'Diğer'
-  ];
+  // Slug ve display name mapping
+  final Map<String, String> _categoryMappings = {
+    'tumu': 'Tümü',
+    'ses-kartlari': 'Ses Kartları',
+    'monitorler': 'Monitörler',
+    'midi-klavyeler': 'Midi Klavyeler',
+    'kayit-setleri': 'Kayıt Setleri',
+    'produksiyon-bilgisayarlari': 'Prodüksiyon Bilgisayarları',
+    'dj-ekipmanlari': 'DJ Ekipmanları',
+    'produksiyon-kontrol-cihazlari': 'Prodüksiyon Kontrol Cihazları',
+    'gaming-podcast-ekipmanlari': 'Gaming ve Podcast Ekipmanları',
+    'mikrofonlar': 'Mikrofonlar',
+    'kulakliklar': 'Kulaklıklar',
+    'studyo-dj-ekipmanlari': 'Stüdyo/DJ Ekipmanları',
+    'kablolar': 'Kablolar',
+    'arabirimler': 'Arabirimler',
+    'kayit-cihazlari': 'Kayıt Cihazları',
+    'pre-amfiler-efektler': 'Pre-Amfiler/Efektler',
+    'yazilimlar': 'Yazılımlar',
+  };
+
+  // Display için kategori listesi
+  List<String> get _categoryDisplayNames => _categoryMappings.values.toList();
+
+  // Slug listesi
+  List<String> get _categorySlugs => _categoryMappings.keys.toList();
+
+  // Şehir ve ilçe verileri - Helper'dan gelecek
+  List<String> get _availableProvinces => TurkeyCitiesHelper.allProvincesWithAll;
+  List<String> get _availableDistricts => TurkeyCitiesHelper.getDistrictsWithAll(_selectedProvince);
 
   final List<String> _sortOptions = [
     'Yeniden Eskiye',
     'Eskiden Yeniye',
     'Fiyat (Düşük-Yüksek)',
     'Fiyat (Yüksek-Düşük)'
+  ];
+
+  final List<String> _dateFilterOptions = [
+    'Tümü',
+    'Son 24 Saat',
+    'Son 3 Gün',
+    'Son 1 Hafta',
+    'Son 1 Ay',
+    'Son 3 Ay'
   ];
 
   // Modern Dark Theme Colors
@@ -65,6 +104,19 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // Display name'den slug'a çeviren function
+  String _getSlugFromDisplayName(String displayName) {
+    return _categoryMappings.entries
+        .firstWhere((entry) => entry.value == displayName,
+        orElse: () => MapEntry('tumu', 'Tümü'))
+        .key;
+  }
+
+  // Slug'dan display name'e çeviren function
+  String _getDisplayNameFromSlug(String slug) {
+    return _categoryMappings[slug] ?? 'Tümü';
   }
 
   @override
@@ -161,7 +213,7 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _checkRightsAndCreateListing,
-        backgroundColor: _blueColor,
+        backgroundColor: Color(0xFF374151), // Modern gri ton
         foregroundColor: _primaryText,
         icon: Icon(Icons.add, size: 24),
         label: Text(
@@ -227,9 +279,11 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
                 _buildFilterChip(
                     'Kategori',
                     _selectedCategory,
-                    _categories,
-                        (value) {
-                      setState(() => _selectedCategory = value);
+                    _categoryDisplayNames,
+                        (selectedDisplayName) {
+                      // Display name'i slug'a çevir ve kaydet
+                      String selectedSlug = _getSlugFromDisplayName(selectedDisplayName);
+                      setState(() => _selectedCategory = selectedSlug);
                       _loadListings();
                     }
                 ),
@@ -258,12 +312,19 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   }
 
   Widget _buildFilterChip(String label, String value, List<String> options, Function(String) onSelected) {
+    // Eğer slug value geliyorsa display name'e çevir
+    String displayValue = label == 'Kategori' ? _getDisplayNameFromSlug(value) : value;
+
     return Container(
       height: 36,
       child: PopupMenuButton<String>(
         onSelected: onSelected,
         color: _cardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.4, // Ekranın max %40'ı
+          minWidth: 200,
+        ),
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
@@ -275,7 +336,7 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '$label: ${value.length > 10 ? value.substring(0, 10) + '...' : value}',
+                '$label: ${displayValue.length > 10 ? displayValue.substring(0, 10) + '...' : displayValue}',
                 style: TextStyle(color: _primaryText, fontSize: 12),
               ),
               SizedBox(width: 4),
@@ -284,15 +345,73 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
           ),
         ),
         itemBuilder: (context) {
-          return options.map((option) {
-            return PopupMenuItem<String>(
-              value: option,
-              child: Text(
-                option,
-                style: TextStyle(color: _primaryText),
+          return [
+            // Kaydırılabilir container içine al
+            PopupMenuItem<String>(
+              enabled: false, // Bu item seçilemez, sadece container görevi görür
+              padding: EdgeInsets.zero,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.35, // İç yükseklik sınırı
+                  minWidth: 180,
+                ),
+                child: Scrollbar(
+                  thumbVisibility: true, // Scroll bar'ı her zaman göster
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: options.map((option) {
+                        bool isSelected = (label == 'Kategori' ?
+                        _getSlugFromDisplayName(option) == value : option == value);
+
+                        return InkWell(
+                          onTap: () {
+                            Navigator.pop(context); // Popup'ı kapat
+                            onSelected(option); // Seçimi işle
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected ? _blueColor.withOpacity(0.1) : Colors.transparent,
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: _borderColor.withOpacity(0.3),
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    option,
+                                    style: TextStyle(
+                                      color: isSelected ? _blueColor : _primaryText,
+                                      fontSize: 14,
+                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected) ...[
+                                  SizedBox(width: 8),
+                                  Icon(
+                                    Icons.check,
+                                    color: _blueColor,
+                                    size: 16,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
               ),
-            );
-          }).toList();
+            ),
+          ];
         },
       ),
     );
@@ -457,7 +576,7 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
                           ),
                           SizedBox(height: 8),
 
-                          // Kategori
+                          // Kategori - slug'ı display name'e çevir
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
@@ -465,7 +584,7 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              listing['category']?.toString() ?? 'Kategori',
+                              _getDisplayNameFromSlug(listing['category']?.toString() ?? ''),
                               style: TextStyle(
                                 color: _accentColor,
                                 fontSize: 10,
@@ -477,7 +596,7 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
 
                           // Fiyat
                           Text(
-                            '${listing['price']?.toString() ?? '0'} EUR',
+                            '${listing['price']?.toString() ?? '0'} TL',
                             style: TextStyle(
                               color: _greenColor,
                               fontSize: 18,
@@ -645,11 +764,65 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   List<dynamic> _getFilteredListings() {
     List<dynamic> filtered = List.from(_listings);
 
-    // Kategori filtresi
-    if (_selectedCategory != 'Tümü') {
+    // Kategori filtresi - slug ile karşılaştır
+    if (_selectedCategory != 'tumu') {
       filtered = filtered.where((listing) =>
       listing['category'] == _selectedCategory).toList();
     }
+
+    // Fiyat filtresi
+    filtered = filtered.where((listing) {
+      final price = listing['price'] ?? 0;
+      return price >= _minPrice && price <= _maxPrice;
+    }).toList();
+
+    // Konum filtresi
+    if (_selectedProvince != 'Tüm İller') {
+      filtered = filtered.where((listing) {
+        final location = listing['location'];
+        return location != null && location['province'] == _selectedProvince;
+      }).toList();
+    }
+
+    if (_selectedDistrict != 'Tüm İlçeler') {
+      filtered = filtered.where((listing) {
+        final location = listing['location'];
+        return location != null && location['district'] == _selectedDistrict;
+      }).toList();
+    }
+
+    // Tarih filtresi
+    if (_selectedDateFilter != 'Tümü') {
+      DateTime filterDate = DateTime.now();
+      switch (_selectedDateFilter) {
+        case 'Son 24 Saat':
+          filterDate = DateTime.now().subtract(Duration(hours: 24));
+          break;
+        case 'Son 3 Gün':
+          filterDate = DateTime.now().subtract(Duration(days: 3));
+          break;
+        case 'Son 1 Hafta':
+          filterDate = DateTime.now().subtract(Duration(days: 7));
+          break;
+        case 'Son 1 Ay':
+          filterDate = DateTime.now().subtract(Duration(days: 30));
+          break;
+        case 'Son 3 Ay':
+          filterDate = DateTime.now().subtract(Duration(days: 90));
+          break;
+      }
+
+      filtered = filtered.where((listing) {
+        try {
+          final createdAt = DateTime.parse(listing['createdAt'].toString());
+          return createdAt.isAfter(filterDate);
+        } catch (e) {
+          return true; // Hatalı tarih varsa dahil et
+        }
+      }).toList();
+    }
+
+    // Sadece fotoğraflı ilanlar filtresi - kaldırıldı
 
     // Arama filtresi
     if (_searchQuery.isNotEmpty) {
@@ -733,8 +906,25 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
     try {
       Map<String, dynamic> queryParams = {};
 
-      if (_selectedCategory != 'Tümü') {
-        queryParams['category'] = _selectedCategory;
+      // Slug kullanarak kategori filtresi
+      if (_selectedCategory != 'tumu') {
+        queryParams['category'] = _selectedCategory; // Slug gönder
+      }
+
+      // Fiyat filtresi
+      if (_minPrice > 0) {
+        queryParams['minPrice'] = _minPrice.toInt();
+      }
+      if (_maxPrice < 50000) {
+        queryParams['maxPrice'] = _maxPrice.toInt();
+      }
+
+      // Konum filtresi
+      if (_selectedProvince != 'Tüm İller') {
+        queryParams['province'] = _selectedProvince;
+      }
+      if (_selectedDistrict != 'Tüm İlçeler') {
+        queryParams['district'] = _selectedDistrict;
       }
 
       if (_searchQuery.isNotEmpty) {
@@ -785,7 +975,6 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
       }
     }
   }
-
   Future<void> _loadUserCredits() async {
     setState(() => _isLoadingCredits = true);
 
@@ -900,32 +1089,298 @@ class _MagazaScreenState extends State<MagazaScreen> with TickerProviderStateMix
   }
 
   void _showFilterDialog() {
-    // Gelecekte daha detaylı filtre seçenekleri için
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: _cardColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(
-            'Gelişmiş Filtreler',
-            style: TextStyle(color: _primaryText),
-          ),
-          content: Text(
-            'Fiyat aralığı, konum ve diğer filtre seçenekleri yakında eklenecek.',
-            style: TextStyle(color: _secondaryText),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Tamam',
-                style: TextStyle(color: _blueColor),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: _cardColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-            ),
-          ],
+              contentPadding: EdgeInsets.fromLTRB(20, 16, 20, 16),
+              title: Row(
+                children: [
+                  Icon(Icons.tune, color: _blueColor, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Filtrele',
+                    style: TextStyle(
+                      color: _primaryText,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      setDialogState(() {
+                        _selectedProvince = 'Tüm İller';
+                        _selectedDistrict = 'Tüm İlçeler';
+                        _minPrice = 0;
+                        _maxPrice = 50000;
+                        _selectedDateFilter = 'Tümü';
+                      });
+                    },
+                    child: Text(
+                      'Temizle',
+                      style: TextStyle(color: _accentColor, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+              content: Container(
+                width: MediaQuery.of(context).size.width * 0.85,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Fiyat Aralığı
+                    Text(
+                      'Fiyat (£)',
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            style: TextStyle(color: _primaryText, fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: 'Min',
+                              hintStyle: TextStyle(color: _tertiaryText, fontSize: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: _borderColor),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: _borderColor),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: _blueColor),
+                              ),
+                              filled: true,
+                              fillColor: _surfaceColor,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                            onChanged: (value) {
+                              setDialogState(() {
+                                _minPrice = double.tryParse(value) ?? 0;
+                              });
+                            },
+                            controller: TextEditingController(text: _minPrice.toInt().toString()),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Text('-', style: TextStyle(color: _accentColor)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            style: TextStyle(color: _primaryText, fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: 'Max',
+                              hintStyle: TextStyle(color: _tertiaryText, fontSize: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: _borderColor),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: _borderColor),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: _blueColor),
+                              ),
+                              filled: true,
+                              fillColor: _surfaceColor,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                            onChanged: (value) {
+                              setDialogState(() {
+                                _maxPrice = double.tryParse(value) ?? 50000;
+                              });
+                            },
+                            controller: TextEditingController(text: _maxPrice.toInt().toString()),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+
+                    // Konum Filtresi
+                    Text(
+                      'Konum',
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _selectedProvince,
+                      decoration: InputDecoration(
+                        hintText: 'İl Seçin',
+                        hintStyle: TextStyle(color: _tertiaryText, fontSize: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: _borderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: _blueColor),
+                        ),
+                        filled: true,
+                        fillColor: _surfaceColor,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        isDense: true,
+                      ),
+                      dropdownColor: _cardColor,
+                      style: TextStyle(color: _primaryText, fontSize: 14),
+                      items: _availableProvinces.map((province) {
+                        return DropdownMenuItem(
+                          value: province,
+                          child: Text(province),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          _selectedProvince = value!;
+                          _selectedDistrict = 'Tüm İlçeler';
+                        });
+                      },
+                    ),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _selectedDistrict,
+                      decoration: InputDecoration(
+                        hintText: 'İlçe Seçin',
+                        hintStyle: TextStyle(color: _tertiaryText, fontSize: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: _borderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: _blueColor),
+                        ),
+                        filled: true,
+                        fillColor: _surfaceColor,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        isDense: true,
+                      ),
+                      dropdownColor: _cardColor,
+                      style: TextStyle(color: _primaryText, fontSize: 14),
+                      items: _availableDistricts.map((district) {
+                        return DropdownMenuItem(
+                          value: district,
+                          child: Text(district),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          _selectedDistrict = value!;
+                        });
+                      },
+                    ),
+                    SizedBox(height: 16),
+
+                    // Tarih Filtresi
+                    Text(
+                      'İlan Tarihi',
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _selectedDateFilter,
+                      decoration: InputDecoration(
+                        hintText: 'Tarih Aralığı',
+                        hintStyle: TextStyle(color: _tertiaryText, fontSize: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: _borderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: _blueColor),
+                        ),
+                        filled: true,
+                        fillColor: _surfaceColor,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        isDense: true,
+                      ),
+                      dropdownColor: _cardColor,
+                      style: TextStyle(color: _primaryText, fontSize: 14),
+                      items: _dateFilterOptions.map((option) {
+                        return DropdownMenuItem(
+                          value: option,
+                          child: Text(option),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          _selectedDateFilter = value!;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'İptal',
+                    style: TextStyle(color: _accentColor, fontSize: 14),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _loadListings(); // Filtreleri uygula
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _blueColor,
+                    foregroundColor: _primaryText,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    minimumSize: Size(0, 36),
+                  ),
+                  child: Text(
+                    'Uygula',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
