@@ -25,6 +25,8 @@ import 'package:djmobilapp/screens/notifications_screen.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:dio/dio.dart';
 
+import 'conversations_screen.dart';
+
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuPressed;
   final int unreadNotificationCount; // ✅ YENİ parametreler
@@ -1479,9 +1481,14 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
             IconButton(
-              icon: Icon(Icons.message_outlined, color: Colors.white),
+              icon: Icon(Icons.message_outlined, color: Colors.white, size: 28),
               onPressed: () {
-                // DM action
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ConversationsScreen(),
+                  ),
+                );
               },
             ),
           ],

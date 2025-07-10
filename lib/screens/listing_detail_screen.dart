@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../message_screen.dart';
 import '../url_constants.dart';
 
 class ListingDetailScreen extends StatefulWidget {
@@ -458,7 +459,54 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       ),
     );
   }
+  void _openMessageScreen() {
+    final user = widget.listing['userId'];
 
+    if (user == null) {
+      _showMessage('Satıcı bilgisi bulunamadı');
+      return;
+    }
+
+    // Satıcı bilgilerini çıkar
+    final sellerId = user['_id']?.toString();
+    final sellerFirstName = user['firstName']?.toString() ?? '';
+    final sellerLastName = user['lastName']?.toString() ?? '';
+    final sellerUsername = user['username']?.toString() ?? '';
+    final sellerProfileImage = user['profileImage']?.toString();
+
+    if (sellerId == null || sellerId.isEmpty) {
+      _showMessage('Satıcı bilgisi eksik');
+      return;
+    }
+
+    // Satıcı tam adını oluştur
+    final sellerFullName = '$sellerFirstName $sellerLastName'.trim();
+    final displayName = sellerFullName.isNotEmpty ? sellerFullName : sellerUsername;
+
+    if (displayName.isEmpty) {
+      _showMessage('Satıcı adı bulunamadı');
+      return;
+    }
+
+    print('🔗 MessageScreen\'e yönlendiriliyor:');
+    print('   Seller ID: $sellerId');
+    print('   Seller Name: $displayName');
+    print('   Seller Username: $sellerUsername');
+    print('   Seller Profile Image: $sellerProfileImage');
+
+    // MessageScreen'e git
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MessageScreen(
+          recipientId: sellerId,
+          recipientName: displayName,
+          recipientUsername: sellerUsername,
+          recipientProfileImage: sellerProfileImage,
+        ),
+      ),
+    );
+  }
   Widget _buildLocationCard() {
     final location = widget.listing['location'];
     if (location == null) return SizedBox.shrink();
@@ -603,6 +651,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       ),
     );
   }
+  Future<void> _incrementMessageContact() async {
+    try {
+      await _dio.post(
+        '${UrlConstants.apiBaseUrl}/api/store/listings/${widget.listing['_id']}/contact',
+      );
+      print('✅ Message contact count incremented');
+    } catch (e) {
+      print('❌ Message contact count increment error: $e');
+      // Sessizce devam et
+    }
+  }
+
+// Eğer mevcut _showContactOptions() metodunu da güncellemek isterseniz:
+
 
   Widget _buildSellerInfo() {
     final user = widget.listing['userId'];
@@ -674,7 +736,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               ),
               // Mesaj butonu
               IconButton(
-                onPressed: () => _showContactOptions(),
+                onPressed: () => _openMessageScreen(),
                 icon: Icon(Icons.message, color: _blueColor),
                 style: IconButton.styleFrom(
                   backgroundColor: _blueColor.withOpacity(0.1),
@@ -865,121 +927,115 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   void _showContactOptions() {
-    final phoneNumber = widget.listing['phoneNumber']?.toString() ?? '';
+    final user = widget.listing['userId'];
+    final phoneNumber = user?['phone']?.toString() ?? widget.listing['phoneNumber']?.toString() ?? '';
 
     showModalBottomSheet(
       context: context,
       backgroundColor: _cardColor,
+      isScrollControlled: true, // Bu satırı ekleyin
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Container(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle bar
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: _borderColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6, // Ekranın %60'ı
+          minChildSize: 0.3,     // Minimum %30
+          maxChildSize: 0.9,     // Maksimum %90
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: _cardColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
-              SizedBox(height: 24),
-
-              // Title
-              Text(
-                'İletişim Seçenekleri',
-                style: TextStyle(
-                  color: _primaryText,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: EdgeInsets.only(
+                  left: 24,
+                  right: 24,
+                  top: 12,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 24,
                 ),
-              ),
-              SizedBox(height: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle bar
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: _borderColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    SizedBox(height: 20),
 
-              // Contact options
-              if (phoneNumber.isNotEmpty) ...[
-                // Telefon araması
-                _buildContactOption(
-                  icon: Icons.phone,
-                  title: 'Telefon Et',
-                  subtitle: phoneNumber,
-                  color: _greenColor,
-                  onTap: () => _makePhoneCall(phoneNumber),
-                ),
+                    // Title
+                    Text(
+                      'İletişim Seçenekleri',
+                      style: TextStyle(
+                        color: _primaryText,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 20),
 
-                SizedBox(height: 12),
+                    // Mesajlaşma seçeneği
+                    _buildContactOption(
+                      icon: Icons.message,
+                      title: 'Mesaj Gönder',
+                      subtitle: 'Uygulama içinden mesajlaş',
+                      color: _blueColor,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _openMessageScreen();
+                        _incrementMessageContact();
+                      },
+                    ),
 
-                // WhatsApp
-                _buildContactOption(
-                  icon: Icons.chat,
-                  title: 'WhatsApp',
-                  subtitle: 'WhatsApp ile mesaj gönder',
-                  color: _greenColor,
-                  onTap: () => _openWhatsApp(phoneNumber),
-                ),
+                    if (phoneNumber.isNotEmpty) ...[
+                      SizedBox(height: 10),
 
-                SizedBox(height: 12),
+                      // Telefon araması
+                      _buildContactOption(
+                        icon: Icons.phone,
+                        title: 'Telefon Et',
+                        subtitle: phoneNumber,
+                        color: _greenColor,
+                        onTap: () => _makePhoneCall(phoneNumber),
+                      ),
 
-                // SMS
-                _buildContactOption(
-                  icon: Icons.sms,
-                  title: 'SMS Gönder',
-                  subtitle: 'Kısa mesaj gönder',
-                  color: _blueColor,
-                  onTap: () => _sendSMS(phoneNumber),
-                ),
-              ] else ...[
-                Container(
-                  padding: EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: _errorColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _errorColor.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.warning, color: _errorColor),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Bu ilan için iletişim bilgisi mevcut değil',
-                          style: TextStyle(color: _errorColor),
-                        ),
+                      SizedBox(height: 10),
+
+                      // WhatsApp
+                      _buildContactOption(
+                        icon: Icons.chat,
+                        title: 'WhatsApp',
+                        subtitle: 'WhatsApp ile mesaj gönder',
+                        color: _greenColor,
+                        onTap: () => _openWhatsApp(phoneNumber),
+                      ),
+
+                      SizedBox(height: 10),
+
+                      // SMS
+                      _buildContactOption(
+                        icon: Icons.sms,
+                        title: 'SMS Gönder',
+                        subtitle: 'Kısa mesaj gönder',
+                        color: _blueColor,
+                        onTap: () => _sendSMS(phoneNumber),
                       ),
                     ],
-                  ),
-                ),
-              ],
 
-              SizedBox(height: 24),
 
-              // Cancel button
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    'İptal',
-                    style: TextStyle(
-                      color: _accentColor,
-                      fontSize: 16,
-                    ),
-                  ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -1144,3 +1200,4 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     super.dispose();
   }
 }
+

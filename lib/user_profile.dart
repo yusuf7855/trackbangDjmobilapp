@@ -6,6 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'playlist_card.dart';
 import './url_constants.dart';
+import 'message_screen.dart'; // YENİ EKLEME
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -269,7 +270,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
           // Gradient background section
           Container(
             height: 160,
-
             child: Stack(
               children: [
                 // Background pattern
@@ -377,11 +377,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
-
                     child: Text(
                       userData!['bio'],
                       style: const TextStyle(
-
                         color: Colors.white70,
                         fontSize: 15,
                         height: 1,
@@ -394,7 +392,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
                 // Stats row
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -411,15 +408,110 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
                   const SizedBox(height: 10),
                   _buildLinksSection(),
                 ],
-                // Follow button - ARTIK GÖRÜNECEk
+
+                // YENİ: Action buttons (takip et ve mesaj gönder)
                 if (!isCurrentUser && authToken != null) ...[
-                  const SizedBox(height: 10),
-                  _buildModernFollowButton(),
+                  const SizedBox(height: 16),
+                  _buildActionButtons(),
                 ],
-
-                // Links section
-
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // YENİ: Action buttons widget
+  Widget _buildActionButtons() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          // Takip et butonu
+          Expanded(
+            flex: 2,
+            child: Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: isFollowing ? Colors.grey[700] : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isFollowing ? Colors.grey[600]! : Colors.black,
+                  width: 1.5,
+                ),
+              ),
+              child: ElevatedButton(
+                onPressed: toggleFollow,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isFollowing ? Icons.person_remove : Icons.person_add,
+                      color: isFollowing ? Colors.white : Colors.black,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isFollowing ? "Takibi Bırak" : "Takip Et",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isFollowing ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Mesaj gönder butonu
+          Expanded(
+            flex: 1,
+            child: Container(
+              height: 56,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[600]!, width: 1.5),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ElevatedButton(
+                onPressed: () {
+                  // Mesajlaşma sayfasına git
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MessageScreen(
+                        recipientId: userData!['_id'],
+                        recipientName: '${userData!['firstName']} ${userData!['lastName']}',
+                        recipientUsername: userData!['username'],
+                        recipientProfileImage: userData!['profileImage'],
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.message_outlined,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
             ),
           ),
         ],
@@ -472,57 +564,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> with TickerProvid
     );
   }
 
-  Widget _buildModernFollowButton() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white, // Arka plan beyaz
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isFollowing ? Colors.grey : Colors.black, // Kenarlık rengi duruma göre
-          width: 1.5,
-        ),
-      ),
-      child: ElevatedButton(
-        onPressed: toggleFollow,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white, // Düğme arka planı beyaz
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isFollowing ? Icons.person_remove : Icons.person_add,
-              color: isFollowing ? Colors.grey[800] : Colors.black,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              isFollowing ? "Takibi Bırak" : "Takip Et",
-              style: TextStyle(
-                fontSize: 16,
-                color: isFollowing ? Colors.grey[800] : Colors.black,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
   Widget _buildLinksSection() {
     final links = userData!['profileLinks'] as List;
     return Container(
       padding: const EdgeInsets.all(6),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -18,6 +18,7 @@ import './firebase_options.dart';
 import './services/notification_permission_service.dart';
 import 'package:dio/dio.dart';
 
+import 'conversations_screen.dart';
 import 'freepage.dart';
 import 'homepage.dart';
 import 'login_page.dart';
@@ -84,7 +85,8 @@ class MyApp extends StatelessWidget {
         '/register': (context) => RegisterPage(),
         '/home': (context) => MainHomePage(),
         '/profile': (context) => ProfileScreen(),
-        '/notifications': (context) => NotificationsScreen(), // ✅ EKLENDİ
+        '/notifications': (context) => NotificationsScreen(),
+        '/conversations': (context) => ConversationsScreen(),
       },
       theme: ThemeData(
         primarySwatch: Colors.indigo,
