@@ -7,12 +7,12 @@ import 'package:djmobilapp/menu/sample_bank_screen.dart';
 import 'package:djmobilapp/menu/mostening_screen.dart';
 import 'package:djmobilapp/menu/magaza_screen.dart';
 import 'package:djmobilapp/menu/biz_kimiz_screen.dart';
-import 'package:djmobilapp/screens/notifications_screen.dart'; // ✅ EKLENDİ
+import 'package:djmobilapp/screens/notifications_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ✅ Firebase ve bildirim import'ları
+// Firebase ve bildirim import'ları
 import 'package:firebase_core/firebase_core.dart';
 import './firebase_options.dart';
 import './services/notification_permission_service.dart';
@@ -49,7 +49,7 @@ class LoadingProvider extends ChangeNotifier {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Firebase'i başlat
+  // Firebase'i başlat
   print('🔥 Firebase başlatılıyor...');
   try {
     await Firebase.initializeApp(
@@ -122,7 +122,7 @@ class _MainHomePageState extends State<MainHomePage> {
     _loadUserId();
     _initializePages();
 
-    // ✅ Bildirim izni kontrolü
+    // Bildirim izni kontrolü
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkNotificationPermission();
     });
@@ -130,13 +130,13 @@ class _MainHomePageState extends State<MainHomePage> {
     debugPrint('MainHomePage initialized');
   }
 
-  // ✅ EKLENDİ: Pages initialization metodu
+  // Pages initialization metodu
   void _initializePages() {
     _pages = [
       HomeScreen(
         onMenuPressed: _openDrawer,
         unreadNotificationCount: unreadNotificationCount,
-        onNotificationPressed: _handleNotificationPressed, // ✅ DÜZELTİLDİ
+        onNotificationPressed: _handleNotificationPressed,
       ),
       SearchPage(),
       MyBangsScreen(),
@@ -144,7 +144,7 @@ class _MainHomePageState extends State<MainHomePage> {
     ];
   }
 
-  // ✅ EKLENDİ: Bildirim izni kontrol metodu
+  // Bildirim izni kontrol metodu
   void _checkNotificationPermission() async {
     // 2 saniye bekle ki uygulama tam yüklensin
     await Future.delayed(Duration(seconds: 2));
@@ -166,7 +166,7 @@ class _MainHomePageState extends State<MainHomePage> {
     _scaffoldKey.currentState?.openDrawer();
   }
 
-  // ✅ DÜZELTİLDİ: Bildirim basma işlevi - NotificationsScreen'e yönlendir
+  // Bildirim basma işlevi - NotificationsScreen'e yönlendir
   void _handleNotificationPressed() {
     print('📱 Bildirim butonuna basıldı - Bildirimler sayfasına yönlendiriliyor');
     Navigator.push(
@@ -186,6 +186,33 @@ class _MainHomePageState extends State<MainHomePage> {
       MaterialPageRoute(builder: (context) => LoginPage()),
           (Route<dynamic> route) => false,
     );
+  }
+
+  // FCM Debug Test
+  Future<void> _performFCMDebugTest() async {
+    try {
+      final dio = Dio();
+      final response = await dio.post(
+        'https://djapi.web.tr/api/send-test-notification',
+        data: {'user_id': userId ?? 'test'},
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Test bildirim gönderildi!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Test başarısız: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -215,200 +242,138 @@ class _MainHomePageState extends State<MainHomePage> {
   }
 
   PreferredSizeWidget? _buildAppBar() {
-    // HomeScreen kendi AppBar'ını yönetsin
-    if (_currentIndex == 0) return null;
+    if (_currentIndex == 0) {
+      return null; // Home screen kendi AppBar'ını yönetir
+    }
 
     String title;
     switch (_currentIndex) {
-      case 1: title = 'Ara'; break;
-      case 2: title = 'My Bangs'; break;
-      case 3: title = 'Profile'; break;
-      default: title = 'App';
+      case 1:
+        title = 'Ara';
+        break;
+      case 2:
+        title = 'My Bangs';
+        break;
+      case 3:
+        title = 'Profil';
+        break;
+      default:
+        title = '';
     }
 
     return AppBar(
+      backgroundColor: Colors.black,
+      elevation: 0,
       title: Text(
         title,
         style: TextStyle(color: Colors.white),
       ),
-      backgroundColor: Colors.black,
-      foregroundColor: Colors.white,
-      leading: IconButton(
-        icon: Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () {
-          setState(() {
-            _currentIndex = 0;
-          });
-        },
-      ),
-      actions: [
-        if (_currentIndex == 3)
-          IconButton(
-            icon: Icon(Icons.logout, color: Colors.white),
-            onPressed: _logout,
-          ),
-      ],
+      iconTheme: IconThemeData(color: Colors.white),
     );
   }
 
   Widget _buildDrawer() {
     return Drawer(
-      backgroundColor: Colors.black,
-      child: ListView(
-        padding: EdgeInsets.zero,
+      backgroundColor: Colors.grey[900],
+      child: Column(
         children: [
           DrawerHeader(
             decoration: BoxDecoration(
-              color: Colors.grey[900],
+              color: Colors.black,
             ),
-            child: Image.asset(
-              'assets/your_logo.png',
-              height: 60,
-              fit: BoxFit.contain,
+            child: Row(
+              children: [
+                Image.asset(
+                  'assets/your_logo.png',
+                  height: 50,
+                  fit: BoxFit.contain,
+                ),
+              ],
             ),
           ),
-          _buildDrawerItem(
-            icon: Icons.list,
-            title: 'Listeler',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ListelerScreen()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.library_music,
-            title: 'Sample Bank',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SampleBankScreen()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.headset,
-            title: 'Mostening',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => MosteningScreen()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.store,
-            title: 'Mağaza',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => MagazaScreen()),
-              );
-            },
-          ),
-          _buildDrawerItem(
-            icon: Icons.info,
-            title: 'Biz Kimiz',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => BizKimizScreen()),
-              );
-            },
-          ),
-          // ✅ EKLENDİ: Bildirimler menü öğesi
-          _buildDrawerItem(
-            icon: Icons.notifications,
-            title: 'Bildirimler',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const NotificationsScreen()),
-              );
-            },
-          ),
-          Divider(color: Colors.grey[700]),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _buildDrawerItem(
+                  icon: Icons.list,
+                  title: 'Listeler',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => ListelerScreen()),
+                    );
+                  },
+                ),
+                _buildDrawerItem(
+                  icon: Icons.library_music,
+                  title: 'Sample Bank',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => SampleBankScreen()),
+                    );
+                  },
+                ),
+                _buildDrawerItem(
+                  icon: Icons.headset,
+                  title: 'Mostening',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => MosteningScreen()),
+                    );
+                  },
+                ),
+                _buildDrawerItem(
+                  icon: Icons.store,
+                  title: 'Mağaza',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => MagazaScreen()),
+                    );
+                  },
+                ),
+                _buildDrawerItem(
+                  icon: Icons.info,
+                  title: 'Biz Kimiz',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => BizKimizScreen()),
+                    );
+                  },
+                ),
+                _buildDrawerItem(
+                  icon: Icons.notifications,
+                  title: 'Bildirimler',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+                    );
+                  },
+                ),
+                Divider(color: Colors.grey[700]),
 
-          // ✅ FCM Test Butonları (Debug için)
-          _buildDrawerItem(
-            icon: Icons.bug_report,
-            title: '🧪 FCM Debug Test',
-            onTap: () async {
-              Navigator.pop(context);
-              await _performFCMDebugTest();
-            },
-          ),
-
-          _buildDrawerItem(
-            icon: Icons.logout,
-            title: 'Çıkış Yap',
-            onTap: () async {
-              Navigator.pop(context);
-              await _logout();
-            },
+                _buildDrawerItem(
+                  icon: Icons.logout,
+                  title: 'Çıkış Yap',
+                  onTap: _logout,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
-  }
-
-  // ✅ FCM Debug Test Metodu
-  Future<void> _performFCMDebugTest() async {
-    try {
-      print('🧪 Drawer FCM Test başlıyor...');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('FCM Test başlatıldı - Console\'u kontrol edin'),
-          backgroundColor: Colors.blue,
-        ),
-      );
-
-      // NotificationPermissionService'i kullanarak test yap
-      final isGranted = await NotificationPermissionService.isPermissionGranted();
-      print('📋 İzin durumu: $isGranted');
-
-      if (!isGranted) {
-        final granted = await NotificationPermissionService.requestPermissionManually(context);
-        if (granted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Bildirim izni verildi'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Bildirim izni reddedildi'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Bildirim izni zaten verilmiş'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ FCM Debug Test hatası: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('FCM Test hatası: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   Widget _buildDrawerItem({
@@ -428,53 +393,99 @@ class _MainHomePageState extends State<MainHomePage> {
   }
 
   Widget _buildBottomNavBar() {
-    return Container(
-      height: 70,
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.9),
-        border: Border(
-          top: BorderSide(
-            color: Colors.grey.withOpacity(0.2),
-            width: 0.5,
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.95),
+          border: Border(
+            top: BorderSide(
+              color: Colors.grey.withOpacity(0.3),
+              width: 0.5,
+            ),
           ),
         ),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          bottomNavigationBarTheme: BottomNavigationBarThemeData(
-            backgroundColor: Colors.transparent,
-            selectedItemColor: Colors.white,
-            unselectedItemColor: Colors.grey,
-            elevation: 0,
-            type: BottomNavigationBarType.fixed,
-          ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          iconSize: 28,
-          selectedFontSize: 12,
-          unselectedFontSize: 10,
-          onTap: (index) => setState(() => _currentIndex = index),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Ana Sayfa',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.search),
-              label: 'Ara',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.favorite_border),
-              label: 'My Bangs',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final screenWidth = MediaQuery.of(context).size.width;
+            final screenHeight = MediaQuery.of(context).size.height;
+
+            // Responsive height calculation
+            double navBarHeight;
+            if (screenHeight < 600) {
+              navBarHeight = 60; // Very small screens
+            } else if (screenHeight < 700) {
+              navBarHeight = 65; // Small screens
+            } else {
+              navBarHeight = 70; // Normal screens
+            }
+
+            // Responsive font and icon sizes
+            double iconSize = screenWidth < 350 ? 24 : 26;
+            double selectedFontSize = screenWidth < 350 ? 10 : 11;
+            double unselectedFontSize = screenWidth < 350 ? 9 : 10;
+
+            return SizedBox(
+              height: navBarHeight,
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  bottomNavigationBarTheme: BottomNavigationBarThemeData(
+                    backgroundColor: Colors.transparent,
+                    selectedItemColor: Colors.white,
+                    unselectedItemColor: Colors.grey[400],
+                    elevation: 0,
+                    type: BottomNavigationBarType.fixed,
+                    selectedLabelStyle: TextStyle(
+                      fontSize: selectedFontSize,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    unselectedLabelStyle: TextStyle(
+                      fontSize: unselectedFontSize,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+                child: BottomNavigationBar(
+                  currentIndex: _currentIndex,
+                  iconSize: iconSize,
+                  selectedFontSize: selectedFontSize,
+                  unselectedFontSize: unselectedFontSize,
+                  onTap: (index) => setState(() => _currentIndex = index),
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Padding(
+                        padding: EdgeInsets.only(bottom: 2),
+                        child: Icon(Icons.home),
+                      ),
+                      label: 'Ana Sayfa',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Padding(
+                        padding: EdgeInsets.only(bottom: 2),
+                        child: Icon(Icons.search),
+                      ),
+                      label: 'Ara',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Padding(
+                        padding: EdgeInsets.only(bottom: 2),
+                        child: Icon(Icons.favorite_border),
+                      ),
+                      label: 'My Bangs',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Padding(
+                        padding: EdgeInsets.only(bottom: 2),
+                        child: Icon(Icons.person),
+                      ),
+                      label: 'Profile',
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

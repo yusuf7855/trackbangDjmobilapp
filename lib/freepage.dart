@@ -92,22 +92,45 @@ class _FreePageState extends State<FreePage> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Arka plan siyah
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.black, // AppBar arka planını da siyah yap
+        backgroundColor: Colors.black,
         title: Image.asset(
           'assets/your_logo.png',
           height: 50,
           fit: BoxFit.contain,
         ),
         centerTitle: true,
-        elevation: 0, // Gölge efektini kaldır (isteğe bağlı)
+        elevation: 0,
       ),
-      body: _allLoaded ? _buildContent() : _buildLoadingAnimation(),
+      body: _allLoaded ? _buildLoadedContent() : _buildLoadingContent(),
     );
   }
 
-  Widget _buildLoadingAnimation() {
+  Widget _buildLoadedContent() {
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                SizedBox(height: 20),
+                // Spotify Web View'ları
+                ...tracks.map((track) => _buildSpotifyEmbed(track['id']!)).toList(),
+                SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+        // Safe Area ile bottom section
+        SafeArea(
+          child: _buildBottomSection(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoadingContent() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -117,32 +140,21 @@ class _FreePageState extends State<FreePage> with SingleTickerProviderStateMixin
             builder: (context, child) {
               return Transform.scale(
                 scale: _scaleAnimation.value,
-                child: Text(
-                  'B',
-                  style: TextStyle(
-                      color: _colorAnimation.value,
-                      fontSize: 96, // Increased from 72 to 96
-                      fontWeight: FontWeight.bold,
-                      fontStyle: FontStyle.italic,
-                      shadows: [
-                  Shadow(
-                  color: Colors.white.withOpacity(0.7),
-                  blurRadius: 15, // Increased blur
-                  offset: Offset(0, 0),
-                  )
-                  ],
+                child: Icon(
+                  Icons.music_note,
+                  size: 60,
+                  color: _colorAnimation.value,
                 ),
-              ),
               );
             },
           ),
-          SizedBox(height: 30),
+          SizedBox(height: 20),
           Text(
-            'İçerikler Yükleniyor...',
+            'Yükleniyor...',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 18, // Slightly larger text
-              letterSpacing: 1.5,
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -150,122 +162,142 @@ class _FreePageState extends State<FreePage> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildContent() {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            physics: const BouncingScrollPhysics(),
-            itemCount: tracks.length,
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              return _buildTrackCard(track);
-            },
-          ),
-        ),
-        _buildBottomSection(),
-      ],
-    );
-  }
+  Widget _buildSpotifyEmbed(String trackId) {
+    final controller = _controllerCache[trackId];
+    if (controller == null) return SizedBox.shrink();
 
-  Widget _buildTrackCard(Map<String, String> track) {
-    final controller = _controllerCache[track['id']];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final screenHeight = MediaQuery.of(context).size.height;
 
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      height: 100,
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withOpacity(0.1),
-            blurRadius: 10,
-            offset: Offset(0, 4),
+        // Responsive height calculation
+        double frameHeight;
+        if (screenHeight < 600) {
+          frameHeight = 90; // Very small screens
+        } else if (screenHeight < 700) {
+          frameHeight = 100; // Small screens
+        } else {
+          frameHeight = 110; // Normal screens
+        }
+
+        // Responsive horizontal margin
+        double horizontalMargin = screenWidth * 0.05; // 5% of screen width
+
+        return Container(
+          margin: EdgeInsets.symmetric(
+            horizontal: horizontalMargin.clamp(16.0, 24.0), // Min 16, Max 24
+            vertical: 0,
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: WebViewWidget(controller: controller!),
-      ),
+          height: frameHeight,
+          child: WebViewWidget(controller: controller),
+        );
+      },
     );
   }
 
   Widget _buildBottomSection() {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Tüm İçeriklere Erişebilmek İçin Sadece 10€/ay Abone Ol',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenHeight = MediaQuery.of(context).size.height;
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isSmallScreen = screenHeight < 700;
+        final isVerySmallScreen = screenHeight < 600;
+
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(
+            horizontal: screenWidth * 0.06, // %6 padding
+            vertical: isVerySmallScreen ? 12 : (isSmallScreen ? 16 : 20),
           ),
-          SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.black,
-                backgroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 3,
-                shadowColor: Colors.white.withOpacity(0.3),
-              ),
-              onPressed: () {
-                Navigator.pushNamed(context, '/register');
-              },
-              child: Text(
-                'Hemen Kayıt Ol',
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Ana metin
+              Text(
+                'Tüm İçeriklere Erişebilmek İçin Sadece 10€/ay Abone Ol',
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: isVerySmallScreen ? 14 : (isSmallScreen ? 15 : 16),
+                  fontWeight: FontWeight.w500,
                 ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
               ),
-            ),
+              SizedBox(height: isVerySmallScreen ? 16 : (isSmallScreen ? 18 : 20)),
+
+              // Butonlar için responsive aralık
+              Column(
+                children: [
+                  // Hemen Kayıt Ol butonu
+                  SizedBox(
+                    width: double.infinity,
+                    height: isVerySmallScreen ? 44 : (isSmallScreen ? 48 : 52),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        elevation: 3,
+                        shadowColor: Colors.white.withOpacity(0.3),
+                      ),
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/register');
+                      },
+                      child: Text(
+                        'Hemen Kayıt Ol',
+                        style: TextStyle(
+                          fontSize: isVerySmallScreen ? 16 : (isSmallScreen ? 17 : 18),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: isVerySmallScreen ? 10 : (isSmallScreen ? 12 : 14)),
+
+                  // Giriş Yap butonu
+                  SizedBox(
+                    width: double.infinity,
+                    height: isVerySmallScreen ? 44 : (isSmallScreen ? 48 : 52),
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(color: Colors.white, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/login');
+                      },
+                      child: Text(
+                        'Giriş Yap',
+                        style: TextStyle(
+                          fontSize: isVerySmallScreen ? 16 : (isSmallScreen ? 17 : 18),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Bottom padding - safe area'dan dolayı az
+              SizedBox(height: isVerySmallScreen ? 8 : 10),
+            ],
           ),
-          SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white),
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pushNamed(context, '/login');
-              },
-              child: Text(
-                'Giriş Yap',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: 10),
-        ],
-      ),
+        );
+      },
     );
   }
 
