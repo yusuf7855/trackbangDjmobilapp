@@ -65,6 +65,9 @@
       <root url="file://$USER_HOME$/AppData/Local/Pub/Cache/hosted/pub.dev/google_maps_flutter-2.12.3" />
       <root url="file://$USER_HOME$/AppData/Local/Pub/Cache/hosted/pub.dev/geocoding_android-3.3.1" />
       <root url="file://$USER_HOME$/AppData/Local/Pub/Cache/hosted/pub.dev/geocoding_ios-2.3.0" />
+      <root url="file://$USER_HOME$/AppData/Local/Pub/Cache/hosted/pub.dev/in_app_purchase_android-0.3.6+13" />
+      <root url="file://$USER_HOME$/AppData/Local/Pub/Cache/hosted/pub.dev/in_app_purchase_storekit-0.3.22+1" />
+      <root url="file://$USER_HOME$/AppData/Local/Pub/Cache/hosted/pub.dev/in_app_purchase-3.2.0" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />
