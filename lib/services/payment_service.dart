@@ -1,3 +1,4 @@
+// lib/services/payment_service.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -21,29 +22,53 @@ class PaymentService {
   static const String monthlySubscriptionId = 'dj_app_monthly_10_euro';
 
   bool _isInitialized = false;
+  bool _isAvailable = false;
 
-  // Initialize service
+  // Initialize service with detailed error handling
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    final bool isAvailable = await _inAppPurchase.isAvailable();
-    if (!isAvailable) {
-      throw Exception('In-app purchases not available');
+    try {
+      print('🔄 Initializing payment service...');
+
+      // Check if in-app purchases are available
+      _isAvailable = await _inAppPurchase.isAvailable();
+      print('📱 In-app purchases available: $_isAvailable');
+
+      if (!_isAvailable) {
+        throw Exception('In-app purchases not available on this device');
+      }
+
+      // Enable pending purchases for Android
+      if (Platform.isAndroid) {
+        print('🤖 Enabling pending purchases for Android...');
+        InAppPurchaseAndroidPlatformAddition.enablePendingPurchases();
+      }
+
+      // Set up purchase stream listener
+      _subscription = _inAppPurchase.purchaseStream.listen(
+        _handlePurchaseUpdates,
+        onDone: () {
+          print('Purchase stream closed');
+          _subscription.cancel();
+        },
+        onError: (error) {
+          print('❌ Purchase stream error: $error');
+        },
+      );
+
+      _isInitialized = true;
+      print('✅ Payment service initialized successfully');
+
+    } catch (error) {
+      print('❌ Payment service initialization failed: $error');
+      _isInitialized = false;
+      rethrow;
     }
-
-    // DÜZELTİLMİŞ - enablePendingPurchases static method (void return type)
-    if (Platform.isAndroid) {
-      InAppPurchaseAndroidPlatformAddition.enablePendingPurchases();
-    }
-
-    _subscription = _inAppPurchase.purchaseStream.listen(
-      _handlePurchaseUpdates,
-      onDone: () => _subscription.cancel(),
-      onError: (error) => print('Purchase stream error: $error'),
-    );
-
-    _isInitialized = true;
   }
+
+  // Check if service is available and ready
+  bool get isAvailable => _isAvailable && _isInitialized;
 
   // Handle purchase updates
   void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
@@ -54,26 +79,38 @@ class PaymentService {
 
   // Handle individual purchase
   Future<void> _handlePurchase(PurchaseDetails purchaseDetails) async {
-    print('Purchase status: ${purchaseDetails.status}');
+    print('📦 Purchase status: ${purchaseDetails.status}');
+    print('📦 Product ID: ${purchaseDetails.productID}');
 
     if (purchaseDetails.status == PurchaseStatus.purchased ||
         purchaseDetails.status == PurchaseStatus.restored) {
 
-      // Verify purchase with backend
-      final bool verified = await _verifyPurchaseWithServer(purchaseDetails);
+      try {
+        // Verify purchase with backend
+        final bool verified = await _verifyPurchaseWithServer(purchaseDetails);
 
-      if (verified) {
-        print('Purchase verified successfully');
-      } else {
-        print('Purchase verification failed');
+        if (verified) {
+          print('✅ Purchase verified successfully');
+        } else {
+          print('❌ Purchase verification failed');
+        }
+      } catch (error) {
+        print('❌ Purchase verification error: $error');
       }
 
       // Complete the purchase
       if (purchaseDetails.pendingCompletePurchase) {
-        await _inAppPurchase.completePurchase(purchaseDetails);
+        try {
+          await _inAppPurchase.completePurchase(purchaseDetails);
+          print('✅ Purchase completed');
+        } catch (error) {
+          print('❌ Purchase completion error: $error');
+        }
       }
     } else if (purchaseDetails.status == PurchaseStatus.error) {
-      print('Purchase error: ${purchaseDetails.error}');
+      print('❌ Purchase error: ${purchaseDetails.error}');
+    } else if (purchaseDetails.status == PurchaseStatus.pending) {
+      print('⏳ Purchase pending...');
     }
   }
 
@@ -105,48 +142,65 @@ class PaymentService {
         return data['success'] == true;
       }
 
+      print('❌ Server verification failed: ${response.statusCode}');
       return false;
     } catch (error) {
-      print('Server verification error: $error');
+      print('❌ Server verification error: $error');
       return false;
     }
   }
 
-  // Purchase monthly subscription
+  // Purchase monthly subscription with detailed error handling
   Future<bool> purchaseMonthlySubscription() async {
     try {
+      print('🔄 Starting purchase process...');
+
+      // Initialize if not already done
       if (!_isInitialized) {
         await initialize();
       }
 
+      // Check availability
+      if (!_isAvailable) {
+        throw Exception('In-app purchases not available');
+      }
+
       // Get product details
+      print('🔄 Querying product details...');
       const Set<String> kIds = <String>{monthlySubscriptionId};
       final ProductDetailsResponse response = await _inAppPurchase.queryProductDetails(kIds);
 
+      if (response.error != null) {
+        throw Exception('Product query error: ${response.error}');
+      }
+
       if (response.notFoundIDs.isNotEmpty) {
-        throw Exception('Product not found: ${response.notFoundIDs}');
+        throw Exception('Product not found in Play Console: ${response.notFoundIDs}');
       }
 
       if (response.productDetails.isEmpty) {
-        throw Exception('No product details found');
+        throw Exception('No product details found. Check Play Console configuration.');
       }
 
       final ProductDetails productDetails = response.productDetails.first;
-      print('Product found: ${productDetails.title} - ${productDetails.price}');
+      print('✅ Product found: ${productDetails.title} - ${productDetails.price}');
 
       // Create purchase param
       final PurchaseParam purchaseParam = PurchaseParam(
         productDetails: productDetails,
       );
 
-      // Start purchase - DÜZELTİLMİŞ: subscription için doğru method
+      // Start purchase - For subscription use buyNonConsumable
+      print('🔄 Starting purchase...');
       final bool result = await _inAppPurchase.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
 
+      print('📱 Purchase initiated: $result');
       return result;
+
     } catch (error) {
-      print('Purchase error: $error');
+      print('❌ Purchase error: $error');
       throw error;
     }
   }
@@ -175,7 +229,7 @@ class PaymentService {
 
       return null;
     } catch (error) {
-      print('Get subscription status error: $error');
+      print('❌ Get subscription status error: $error');
       return null;
     }
   }
@@ -186,7 +240,7 @@ class PaymentService {
       final subscription = await getSubscriptionStatus();
       return subscription?['isPremium'] == true;
     } catch (error) {
-      print('Check premium status error: $error');
+      print('❌ Check premium status error: $error');
       return false;
     }
   }
@@ -194,10 +248,42 @@ class PaymentService {
   // Restore purchases
   Future<void> restorePurchases() async {
     try {
+      if (!_isInitialized) {
+        await initialize();
+      }
+
+      print('🔄 Restoring purchases...');
       await _inAppPurchase.restorePurchases();
+      print('✅ Restore purchases initiated');
     } catch (error) {
-      print('Restore purchases error: $error');
+      print('❌ Restore purchases error: $error');
       throw error;
+    }
+  }
+
+  // Test product availability
+  Future<bool> testProductAvailability() async {
+    try {
+      await initialize();
+
+      const Set<String> kIds = <String>{monthlySubscriptionId};
+      final ProductDetailsResponse response = await _inAppPurchase.queryProductDetails(kIds);
+
+      print('🧪 Test Results:');
+      print('   Error: ${response.error}');
+      print('   Not Found: ${response.notFoundIDs}');
+      print('   Found Products: ${response.productDetails.length}');
+
+      if (response.productDetails.isNotEmpty) {
+        final product = response.productDetails.first;
+        print('   Product: ${product.title} - ${product.price}');
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      print('❌ Product test error: $error');
+      return false;
     }
   }
 
