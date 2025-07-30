@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "508468914079",
-    "project_id": "djmobilapp",
-    "storage_bucket": "djmobilapp.firebasestorage.app"
+    "project_number": "164731560987",
+    "project_id": "trackbang-260e6",
+    "storage_bucket": "trackbang-260e6.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:508468914079:android:a07982a4c71fc7d8d17faa",
+        "mobilesdk_app_id": "1:164731560987:android:2741243ca5a805af14c4be",
         "android_client_info": {
-          "package_name": "com.example.djmobilapp"
+          "package_name": "com.trackbang.djmobilapp"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCOKhT6gipYKAjo43d4nXpxoWrBKDpQZ5w"
+          "current_key": "AIzaSyCkecfVnZtc6u1m25ZWUBtTijTaiKOHyto"
         }
       ],
       "services": {

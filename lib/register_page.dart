@@ -33,6 +33,17 @@ class _RegisterPageState extends State<RegisterPage> {
     _initializePaymentService();
   }
 
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _nameController.dispose();
+    _surnameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _initializePaymentService() async {
     try {
       await _paymentService.initialize();
@@ -44,6 +55,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+
+    FocusScope.of(context).unfocus();
 
     setState(() {
       _isLoading = true;
@@ -88,7 +101,9 @@ class _RegisterPageState extends State<RegisterPage> {
     } catch (e) {
       setState(() => _errorMessage = 'Bağlantı hatası: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -101,11 +116,12 @@ class _RegisterPageState extends State<RegisterPage> {
         return WillPopScope(
           onWillPop: () async => false, // Geri tuşunu devre dışı bırak
           child: AlertDialog(
+            backgroundColor: Colors.black,
             title: Row(
               children: [
-                Icon(Icons.payment, color: Colors.green),
+                Icon(Icons.payment, color: Colors.white),
                 SizedBox(width: 8),
-                Text('💳 Premium Üyelik Zorunlu'),
+                Text('💳 Premium Üyelik Zorunlu', style: TextStyle(color: Colors.white)),
               ],
             ),
             content: Column(
@@ -115,18 +131,18 @@ class _RegisterPageState extends State<RegisterPage> {
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.white.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue),
+                    border: Border.all(color: Colors.white),
                   ),
                   child: Text(
                     '📱 Hesabınız oluşturuldu!\nUygulamayı kullanmaya başlamak için Premium üyelik gereklidir.',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
                 SizedBox(height: 16),
                 Text('🎵 Premium Üyelik Avantajları:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
                 SizedBox(height: 8),
                 _buildFeature('✨', 'Tüm içeriklere sınırsız erişim'),
                 _buildFeature('📱', 'Reklamsız deneyim'),
@@ -140,9 +156,9 @@ class _RegisterPageState extends State<RegisterPage> {
                   width: double.infinity,
                   padding: EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.white.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green, width: 2),
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
                   child: Column(
                     children: [
@@ -151,14 +167,14 @@ class _RegisterPageState extends State<RegisterPage> {
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                          color: Colors.white,
                         ),
                       ),
                       Text(
                         'İlk ay deneme süresi',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.green[700],
+                          color: Colors.white70,
                         ),
                       ),
                     ],
@@ -173,8 +189,8 @@ class _RegisterPageState extends State<RegisterPage> {
                 child: ElevatedButton(
                   onPressed: _isPaymentInProgress ? null : _handlePremiumPurchase,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
                     padding: EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -188,7 +204,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
+                          color: Colors.black,
                           strokeWidth: 2,
                         ),
                       ),
@@ -229,7 +245,7 @@ class _RegisterPageState extends State<RegisterPage> {
           Expanded(
             child: Text(
               text,
-              style: TextStyle(fontSize: 14),
+              style: TextStyle(fontSize: 14, color: Colors.white70),
             ),
           ),
         ],
@@ -283,15 +299,16 @@ class _RegisterPageState extends State<RegisterPage> {
         return WillPopScope(
           onWillPop: () async => false,
           child: AlertDialog(
+            backgroundColor: Colors.black,
             title: Row(
               children: [
                 SizedBox(
                   width: 30,
                   height: 30,
-                  child: CircularProgressIndicator(strokeWidth: 3),
+                  child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
                 ),
                 SizedBox(width: 16),
-                Text('İşleminiz Gerçekleştiriliyor'),
+                Text('İşleminiz Gerçekleştiriliyor', style: TextStyle(color: Colors.white)),
               ],
             ),
             content: Column(
@@ -300,20 +317,20 @@ class _RegisterPageState extends State<RegisterPage> {
                 Text(
                   'Ödemeniz Google Play üzerinden işleniyor...\n\nLütfen bekleyin, sayfayı kapatmayın.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
+                  style: TextStyle(fontSize: 16, color: Colors.white),
                 ),
                 SizedBox(height: 16),
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.white.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     '💡 Bu işlem 30 saniye ile 2 dakika arası sürebilir.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.blue[700],
+                      color: Colors.white70,
                     ),
                   ),
                 ),
@@ -356,11 +373,12 @@ class _RegisterPageState extends State<RegisterPage> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
+          backgroundColor: Colors.black,
           title: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 30),
+              Icon(Icons.check_circle, color: Colors.white, size: 30),
               SizedBox(width: 12),
-              Text('🎉 Tebrikler!'),
+              Text('🎉 Tebrikler!', style: TextStyle(color: Colors.white)),
             ],
           ),
           content: Column(
@@ -369,20 +387,20 @@ class _RegisterPageState extends State<RegisterPage> {
               Text(
                 'Premium üyeliğiniz başarıyla aktifleştirildi!\n\nArtık tüm özelliklerden yararlanabilirsiniz.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16, color: Colors.white),
               ),
               SizedBox(height: 16),
               Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.white.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '✨ Hoş geldiniz! Uygulamayı keşfetmeye başlayabilirsiniz.',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
+                    color: Colors.white70,
                   ),
                 ),
               ),
@@ -397,8 +415,8 @@ class _RegisterPageState extends State<RegisterPage> {
                   Navigator.pushReplacementNamed(context, '/free'); // Ana sayfaya git
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
                   padding: EdgeInsets.symmetric(vertical: 16),
                 ),
                 child: Text(
@@ -420,11 +438,12 @@ class _RegisterPageState extends State<RegisterPage> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
+          backgroundColor: Colors.black,
           title: Row(
             children: [
               Icon(Icons.warning, color: Colors.orange),
               SizedBox(width: 8),
-              Text('⏳ Ödeme Bekleniyor'),
+              Text('⏳ Ödeme Bekleniyor', style: TextStyle(color: Colors.white)),
             ],
           ),
           content: Column(
@@ -433,11 +452,12 @@ class _RegisterPageState extends State<RegisterPage> {
               Text(
                 'Ödemeniz henüz onaylanmadı.\n\nBu normal bir durum - Google Play ödemeleri birkaç dakika sürebilir.',
                 textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white),
               ),
               SizedBox(height: 16),
               Text(
                 'Ne yapmak istiyorsunuz?',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
               ),
             ],
           ),
@@ -447,14 +467,14 @@ class _RegisterPageState extends State<RegisterPage> {
                 Navigator.of(context).pop();
                 _checkSubscriptionStatus(); // Tekrar kontrol et
               },
-              child: Text('🔄 Tekrar Kontrol Et'),
+              child: Text('🔄 Tekrar Kontrol Et', style: TextStyle(color: Colors.white70)),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 _showPaymentDialog(); // Ödeme dialogunu tekrar aç
               },
-              child: Text('💳 Yeniden Ödeme Yap'),
+              child: Text('💳 Yeniden Ödeme Yap', style: TextStyle(color: Colors.white70)),
             ),
           ],
         );
@@ -468,21 +488,22 @@ class _RegisterPageState extends State<RegisterPage> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
+          backgroundColor: Colors.black,
           title: Row(
             children: [
               Icon(Icons.error, color: Colors.red),
               SizedBox(width: 8),
-              Text('❌ Hata'),
+              Text('❌ Hata', style: TextStyle(color: Colors.white)),
             ],
           ),
-          content: Text(message),
+          content: Text(message, style: TextStyle(color: Colors.white)),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 _showPaymentDialog(); // Ödeme dialoguna geri dön
               },
-              child: Text('Tekrar Dene'),
+              child: Text('Tekrar Dene', style: TextStyle(color: Colors.white70)),
             ),
           ],
         );
@@ -492,221 +513,192 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(height: 40),
-              // Logo
-              Container(
-                height: 100,
-                child: Icon(
-                  Icons.music_note,
-                  size: 80,
-                  color: Theme.of(context).primaryColor,
-                ),
-              ),
-              SizedBox(height: 40),
-              Text(
-                'Hesap Oluştur',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).primaryColor,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 10),
-              Text(
-                'Premium üyelikle tüm özelliklere erişin',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 30),
-
-              // Error message
-              if (_errorMessage.isNotEmpty)
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(height: 60),
+                // Logo kısmı
                 Container(
-                  padding: EdgeInsets.all(12),
-                  margin: EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red),
-                  ),
-                  child: Text(
-                    _errorMessage,
-                    style: TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
+                  height: 100,
+                  child: Image.asset('assets/your_logo.png'),
                 ),
+                SizedBox(height: 40),
 
-              // Form
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    TextFormField(
-                      controller: _usernameController,
-                      decoration: InputDecoration(
-                        labelText: 'Kullanıcı Adı',
-                        prefixIcon: Icon(Icons.person),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      validator: (value) => value!.isEmpty ? 'Kullanıcı adı gerekli' : null,
+                // Error message
+                if (_errorMessage.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: Text(
+                      _errorMessage,
+                      style: TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
                     ),
-                    SizedBox(height: 16),
+                  ),
 
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: InputDecoration(
-                        labelText: 'Ad',
-                        prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                // Form
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _usernameController,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Kullanıcı Adı',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.person, color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white70),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white),
+                          ),
                         ),
+                        validator: (value) => value!.isEmpty ? 'Kullanıcı adı gerekli' : null,
                       ),
-                      validator: (value) => value!.isEmpty ? 'Ad gerekli' : null,
-                    ),
-                    SizedBox(height: 16),
+                      SizedBox(height: 20),
 
-                    TextFormField(
-                      controller: _surnameController,
-                      decoration: InputDecoration(
-                        labelText: 'Soyad',
-                        prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      TextFormField(
+                        controller: _nameController,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Ad',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.person_outline, color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white70),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white),
+                          ),
                         ),
+                        validator: (value) => value!.isEmpty ? 'Ad gerekli' : null,
                       ),
-                      validator: (value) => value!.isEmpty ? 'Soyad gerekli' : null,
-                    ),
-                    SizedBox(height: 16),
+                      SizedBox(height: 20),
 
-                    TextFormField(
-                      controller: _phoneController,
-                      decoration: InputDecoration(
-                        labelText: 'Telefon',
-                        prefixIcon: Icon(Icons.phone),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      TextFormField(
+                        controller: _surnameController,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Soyad',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.person_outline, color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white70),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white),
+                          ),
                         ),
+                        validator: (value) => value!.isEmpty ? 'Soyad gerekli' : null,
                       ),
-                      keyboardType: TextInputType.phone,
-                      validator: (value) => value!.isEmpty ? 'Telefon gerekli' : null,
-                    ),
-                    SizedBox(height: 16),
+                      SizedBox(height: 20),
 
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: InputDecoration(
-                        labelText: 'E-posta',
-                        prefixIcon: Icon(Icons.email),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      TextFormField(
+                        controller: _phoneController,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Telefon',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.phone, color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white70),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white),
+                          ),
                         ),
+                        keyboardType: TextInputType.phone,
+                        validator: (value) => value!.isEmpty ? 'Telefon gerekli' : null,
                       ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value!.isEmpty) return 'E-posta gerekli';
-                        if (!value.contains('@')) return 'Geçerli e-posta girin';
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 16),
+                      SizedBox(height: 20),
 
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: InputDecoration(
-                        labelText: 'Şifre',
-                        prefixIcon: Icon(Icons.lock),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      TextFormField(
+                        controller: _emailController,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'E-posta',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.email, color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white70),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white),
+                          ),
                         ),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value!.isEmpty) return 'E-posta gerekli';
+                          if (!value.contains('@')) return 'Geçerli e-posta girin';
+                          return null;
+                        },
                       ),
-                      obscureText: true,
-                      validator: (value) {
-                        if (value!.isEmpty) return 'Şifre gerekli';
-                        if (value.length < 6) return 'Şifre en az 6 karakter olmalı';
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 24),
+                      SizedBox(height: 20),
 
-                    // Register Button
-                    Container(
-                      width: double.infinity,
-                      child: ElevatedButton(
+                      TextFormField(
+                        controller: _passwordController,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Şifre',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.lock, color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white70),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.white),
+                          ),
+                        ),
+                        obscureText: true,
+                        validator: (value) {
+                          if (value!.isEmpty) return 'Şifre gerekli';
+                          if (value.length < 6) return 'Şifre en az 6 karakter olmalı';
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 30),
+
+                      // Register Button
+                      ElevatedButton(
                         onPressed: _isLoading ? null : _register,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          minimumSize: Size(double.infinity, 50),
+                          elevation: 0,
                         ),
                         child: _isLoading
-                            ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Text('Hesap Oluşturuluyor...'),
-                          ],
-                        )
-                            : Text(
-                          'Hesap Oluştur & Premium Ol',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                            ? CircularProgressIndicator(color: Colors.black)
+                            : Text('Hesap Oluştur', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      SizedBox(height: 20),
+
+                      // Login Link
+                      TextButton(
+                        onPressed: _isLoading ? null : () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (context) => LoginPage()),
+                          );
+                        },
+                        child: Text(
+                          'Zaten hesabınız var mı? Giriş Yap',
+                          style: TextStyle(color: Colors.white70),
                         ),
                       ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Login Link
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Zaten hesabınız var mı? '),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (context) => LoginPage()),
-                            );
-                          },
-                          child: Text(
-                            'Giriş Yapın',
-                            style: TextStyle(
-                              color: Theme.of(context).primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

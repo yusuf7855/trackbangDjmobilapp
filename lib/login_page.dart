@@ -343,6 +343,11 @@ class _LoginPageState extends State<LoginPage> {
                             : Text('Giriş Yap', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                       SizedBox(height: 20),
+                      Text(
+                        '🧪 Test hesabı:\nKullanıcı adı: test\nŞifre: 123456',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white60, fontSize: 14),
+                      ),
                       TextButton(
                         onPressed: _isLoading ? null : _showForgotPasswordDialog,
                         child: Text('Şifremi Unuttum',
