@@ -255,41 +255,26 @@ class _RegisterPageState extends State<RegisterPage> {
 
   // ÖDEME İŞLEMİ
   Future<void> _handlePremiumPurchase() async {
-    if (_isPaymentInProgress) return;
-
-    setState(() {
-      _isPaymentInProgress = true;
-    });
+    setState(() => _isPaymentInProgress = true);
 
     try {
-      print('🛒 Starting premium purchase...');
+      _showProcessingDialog();
 
-      // Auth token kontrolü
-      if (_authToken == null) {
-        throw Exception('Kullanıcı girişi gerekli');
-      }
-
-      // Payment service ile ödeme başlat
+      // PaymentService üzerinden ödeme başlat
       final bool success = await _paymentService.purchaseMonthlySubscription();
 
       if (success) {
-        print('✅ Payment process started successfully');
-        Navigator.of(context).pop(); // Ödeme dialogunu kapat
-        _showProcessingDialog();
-      } else {
-        throw Exception('Ödeme işlemi başlatılamadı');
+        // 30 saniye bekle, ardından durum kontrol et
+        await Future.delayed(Duration(seconds: 30));
+        _checkSubscriptionStatus();
       }
-
     } catch (error) {
       print('❌ Payment error: $error');
       _showErrorDialog('Ödeme hatası: $error');
     } finally {
-      setState(() {
-        _isPaymentInProgress = false;
-      });
+      setState(() => _isPaymentInProgress = false);
     }
   }
-
   // ÖDEME İŞLEME DIALOGU
   void _showProcessingDialog() {
     showDialog(

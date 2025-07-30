@@ -222,7 +222,7 @@ class _FreePageState extends State<FreePage> with SingleTickerProviderStateMixin
             children: [
               // Ana metin
               Text(
-                'Tüm İçeriklere Erişebilmek İçin Sadece 10€/ay Abone Ol',
+                'Tüm İçeriklere Erişebilmek İçin Sadece 4€/ay Abone Ol',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: isVerySmallScreen ? 14 : (isSmallScreen ? 15 : 16),
