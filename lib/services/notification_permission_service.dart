@@ -260,7 +260,7 @@ class NotificationPermissionService {
       // Backend'e kaydet
       final dio = Dio();
       final response = await dio.post(
-        'http://192.168.1.106:5000/api/notifications/register-token',
+        'http://192.168.1.103:5000/api/notifications/register-token',
         options: Options(
           headers: {
             'Authorization': 'Bearer $authToken',

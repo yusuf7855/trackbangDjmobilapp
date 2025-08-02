@@ -533,11 +533,11 @@ class _SampleBankScreenState extends State<SampleBankScreen>
         finalUrl = finalUrl.replaceFirst('https://', 'http://');
       }
       if (finalUrl.contains('localhost') || finalUrl.contains('127.0.0.1')) {
-        finalUrl = finalUrl.replaceAll('localhost', '192.168.1.106');
-        finalUrl = finalUrl.replaceAll('127.0.0.1', '192.168.1.106');
+        finalUrl = finalUrl.replaceAll('localhost', '192.168.1.103');
+        finalUrl = finalUrl.replaceAll('127.0.0.1', '192.168.1.103');
       }
       if (finalUrl.contains('10.0.2.2')) {
-        finalUrl = finalUrl.replaceAll('10.0.2.2', '192.168.1.106');
+        finalUrl = finalUrl.replaceAll('10.0.2.2', '192.168.1.103');
       }
     } else if (imageUrl.startsWith('/uploads/')) {
       finalUrl = '$baseUrl$imageUrl';
@@ -561,11 +561,11 @@ class _SampleBankScreenState extends State<SampleBankScreen>
         finalUrl = finalUrl.replaceFirst('https://', 'http://');
       }
       if (finalUrl.contains('localhost') || finalUrl.contains('127.0.0.1')) {
-        finalUrl = finalUrl.replaceAll('localhost', '192.168.1.106');
-        finalUrl = finalUrl.replaceAll('127.0.0.1', '192.168.1.106');
+        finalUrl = finalUrl.replaceAll('localhost', '192.168.1.103');
+        finalUrl = finalUrl.replaceAll('127.0.0.1', '192.168.1.103');
       }
       if (finalUrl.contains('10.0.2.2')) {
-        finalUrl = finalUrl.replaceAll('10.0.2.2', '192.168.1.106');
+        finalUrl = finalUrl.replaceAll('10.0.2.2', '192.168.1.103');
       }
     } else if (demoUrl.startsWith('/uploads/')) {
       finalUrl = '$baseUrl$demoUrl';
