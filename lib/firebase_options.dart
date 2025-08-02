@@ -145,7 +145,7 @@ class FirebaseConfig {
   static const bool enableRemoteConfig = true;
 
   // Android özel ayarları
-  static const String androidPackageName = 'com.example.djmobilapp';
+  static const String androidPackageName = 'com.trackbang.djmobilapp';
   static const int minAndroidSdkVersion = 21; // Android 5.0 (API level 21)
   static const int targetAndroidSdkVersion = 34; // Android 14 (API level 34)
 }
