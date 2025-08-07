@@ -2,7 +2,7 @@
 
 class Constants {
   // ✅ API Base URL - Kendi API URL'nizi buraya yazın
-  static const String apiBaseUrl = 'http://192.168.1.103:5000'; // DEĞİŞTİRİN!
+  static const String apiBaseUrl = 'https://trackbangserver.com';
 
   // Authentication endpoints
   static const String loginEndpoint = '/api/auth/login';
