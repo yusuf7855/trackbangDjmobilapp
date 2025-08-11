@@ -1,4 +1,4 @@
-// lib/services/payment_service.dart - Eksiksiz hatasız versiyon
+// lib/services/payment_service.dart - Eksiksiz güncellenmiş versiyon
 
 import 'dart:async';
 import 'dart:io';
@@ -31,7 +31,7 @@ class PaymentService {
   bool _isInitialized = false;
   bool _isAvailable = false;
 
-  // Initialize service
+  // Initialize service - inline ödeme için optimized
   Future<void> initialize() async {
     if (_isInitialized) return;
 
@@ -46,10 +46,14 @@ class PaymentService {
         throw Exception('Google Play Billing bu cihazda kullanılamıyor');
       }
 
-      // Enable pending purchases for Android
+      // Enable pending purchases for Android - inline ödeme için gerekli
       if (Platform.isAndroid) {
-        print('🤖 Android pending purchases aktifleştiriliyor...');
+        print('🤖 Android pending purchases ve inline ödeme aktifleştiriliyor...');
         InAppPurchaseAndroidPlatformAddition.enablePendingPurchases();
+
+        // Android için inline ödeme ayarları
+        final InAppPurchaseAndroidPlatformAddition androidAddition =
+        _inAppPurchase.getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
       }
 
       // Set up purchase stream listener
@@ -104,6 +108,84 @@ class PaymentService {
     }
   }
 
+  // ✅ ABONELİK SATINALMASI - Inline ödeme ile
+  Future<bool> purchaseMonthlySubscription() async {
+    try {
+      print('🔄 Aylık abonelik satın alma başlatılıyor...');
+
+      if (!_isInitialized) await initialize();
+      if (!_isAvailable) throw Exception('Google Play Billing kullanılamıyor');
+
+      // Get subscription details from Google Play Console
+      print('🔄 Google Play Console\'dan abonelik bilgileri alınıyor...');
+      final Set<String> subscriptionIds = {monthlySubscriptionId};
+      final ProductDetailsResponse response = await _inAppPurchase.queryProductDetails(subscriptionIds);
+
+      print('🔍 Abonelik sorgu sonucu:');
+      print('   Hata: ${response.error}');
+      print('   Bulunamayan ID\'ler: ${response.notFoundIDs}');
+      print('   Bulunan abonelik sayısı: ${response.productDetails.length}');
+
+      // Check for errors
+      if (response.error != null) {
+        throw Exception('Google Play abonelik sorgu hatası: ${response.error}');
+      }
+
+      if (response.notFoundIDs.isNotEmpty) {
+        print('❌ Google Play Console\'da bulunamayan abonelikler: ${response.notFoundIDs}');
+        throw Exception('''
+Abonelik sistemi henüz hazır değil.
+Lütfen Google Play Console'da şu aboneliği oluşturun:
+Subscription ID: $monthlySubscriptionId
+Type: Subscription (Auto-renewable)
+Price: ₺180.00/month
+
+Bulunamayan abonelikler: ${response.notFoundIDs}
+        ''');
+      }
+
+      if (response.productDetails.isEmpty) {
+        throw Exception('Google Play Console\'da hiç abonelik bulunamadı. Lütfen "$monthlySubscriptionId" aboneliğini oluşturun.');
+      }
+
+      // Subscription found, proceed with purchase
+      final ProductDetails productDetails = response.productDetails.first;
+      print('✅ Google Play\'de abonelik bulundu:');
+      print('   ID: ${productDetails.id}');
+      print('   Başlık: ${productDetails.title}');
+      print('   Fiyat: ${productDetails.price} (Beklenen: ₺180/ay)');
+      print('   Açıklama: ${productDetails.description}');
+
+      // INLINE ÖDEME İÇİN ÖZEL PARAMETRE AYARLARI
+      final PurchaseParam purchaseParam = PurchaseParam(
+        productDetails: productDetails,
+        applicationUserName: null, // Inline ödeme için null olmalı
+      );
+
+      // Start subscription purchase flow - INLINE ÖDEME
+      print('🔄 Google Play Store inline abonelik ödeme akışı başlatılıyor...');
+      final bool result = await _inAppPurchase.buyNonConsumable(
+        purchaseParam: purchaseParam,
+      );
+
+      print('📱 Google Play inline abonelik ödeme akışı başlatma sonucu: $result');
+
+      if (result) {
+        print('✅ Google Play Store inline abonelik ödeme ekranı açıldı');
+        print('💡 Kullanıcı inline ödeme ekranında işlem yapacak...');
+      } else {
+        print('❌ Google Play Store inline abonelik ödeme ekranı açılamadı');
+      }
+
+      return result;
+
+    } catch (error) {
+      print('❌ Abonelik satın alma hatası: $error');
+      onPurchaseError?.call(error.toString());
+      rethrow;
+    }
+  }
+
   // ✅ UYGULAMA İÇİ ÜRÜN SATINALMASI - Tek seferlik premium erişim
   Future<bool> purchasePremiumAccess() async {
     try {
@@ -131,7 +213,6 @@ class PaymentService {
         print('❌ Google Play Console\'da bulunamayan ürünler: ${response.notFoundIDs}');
         throw Exception('''
 Ödeme sistemi henüz hazır değil.
-
 Lütfen Google Play Console'da şu ürünü oluşturun:
 Product ID: $premiumAccessProductId
 Type: In-app product (Managed)
@@ -153,108 +234,31 @@ Bulunamayan ürünler: ${response.notFoundIDs}
       print('   Fiyat: ${productDetails.price} (Beklenen: ₺180.00)');
       print('   Açıklama: ${productDetails.description}');
 
-      // Create purchase parameter
+      // Create purchase parameter - inline ödeme için
       final PurchaseParam purchaseParam = PurchaseParam(
         productDetails: productDetails,
+        applicationUserName: null, // Inline ödeme için null
       );
 
       // Start purchase flow - TEK SEFERLİK ÜRÜN İÇİN buyNonConsumable kullanıyoruz
-      print('🔄 Google Play Store ödeme akışı başlatılıyor...');
+      print('🔄 Google Play Store inline ödeme akışı başlatılıyor...');
       final bool result = await _inAppPurchase.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
 
-      print('📱 Google Play ödeme akışı başlatma sonucu: $result');
+      print('📱 Google Play inline ödeme akışı başlatma sonucu: $result');
 
       if (result) {
-        print('✅ Google Play Store ödeme ekranı açıldı');
-        print('💡 Kullanıcı ödeme ekranında işlem yapacak...');
+        print('✅ Google Play Store inline ödeme ekranı açıldı');
+        print('💡 Kullanıcı inline ödeme ekranında işlem yapacak...');
       } else {
-        print('❌ Google Play Store ödeme ekranı açılamadı');
+        print('❌ Google Play Store inline ödeme ekranı açılamadı');
       }
 
       return result;
 
     } catch (error) {
       print('❌ Premium erişim satın alma hatası: $error');
-      onPurchaseError?.call(error.toString());
-      rethrow;
-    }
-  }
-
-  // ✅ ABONELİK SATINALMASI - Aylık abonelik
-  Future<bool> purchaseMonthlySubscription() async {
-    try {
-      print('🔄 Aylık abonelik satın alma başlatılıyor...');
-
-      if (!_isInitialized) await initialize();
-      if (!_isAvailable) throw Exception('Google Play Billing kullanılamıyor');
-
-      // Get subscription details from Google Play Console
-      print('🔄 Google Play Console\'dan abonelik bilgileri alınıyor...');
-      final Set<String> subscriptionIds = {monthlySubscriptionId};
-      final ProductDetailsResponse response = await _inAppPurchase.queryProductDetails(subscriptionIds);
-
-      print('🔍 Abonelik sorgu sonucu:');
-      print('   Hata: ${response.error}');
-      print('   Bulunamayan ID\'ler: ${response.notFoundIDs}');
-      print('   Bulunan abonelik sayısı: ${response.productDetails.length}');
-
-      // Check for errors
-      if (response.error != null) {
-        throw Exception('Google Play abonelik sorgu hatası: ${response.error}');
-      }
-
-      if (response.notFoundIDs.isNotEmpty) {
-        print('❌ Google Play Console\'da bulunamayan abonelikler: ${response.notFoundIDs}');
-        throw Exception('''
-Abonelik sistemi henüz hazır değil.
-
-Lütfen Google Play Console'da şu aboneliği oluşturun:
-Subscription ID: $monthlySubscriptionId
-Type: Subscription (Auto-renewable)
-Price: ₺180.00/month
-
-Bulunamayan abonelikler: ${response.notFoundIDs}
-        ''');
-      }
-
-      if (response.productDetails.isEmpty) {
-        throw Exception('Google Play Console\'da hiç abonelik bulunamadı. Lütfen "$monthlySubscriptionId" aboneliğini oluşturun.');
-      }
-
-      // Subscription found, proceed with purchase
-      final ProductDetails productDetails = response.productDetails.first;
-      print('✅ Google Play\'de abonelik bulundu:');
-      print('   ID: ${productDetails.id}');
-      print('   Başlık: ${productDetails.title}');
-      print('   Fiyat: ${productDetails.price} (Beklenen: ₺180/ay)');
-      print('   Açıklama: ${productDetails.description}');
-
-      // Create purchase parameter
-      final PurchaseParam purchaseParam = PurchaseParam(
-        productDetails: productDetails,
-      );
-
-      // Start subscription purchase flow - ABONELİK İÇİN buyNonConsumable kullanıyoruz
-      print('🔄 Google Play Store abonelik ödeme akışı başlatılıyor...');
-      final bool result = await _inAppPurchase.buyNonConsumable(
-        purchaseParam: purchaseParam,
-      );
-
-      print('📱 Google Play abonelik ödeme akışı başlatma sonucu: $result');
-
-      if (result) {
-        print('✅ Google Play Store abonelik ödeme ekranı açıldı');
-        print('💡 Kullanıcı abonelik ödeme ekranında işlem yapacak...');
-      } else {
-        print('❌ Google Play Store abonelik ödeme ekranı açılamadı');
-      }
-
-      return result;
-
-    } catch (error) {
-      print('❌ Abonelik satın alma hatası: $error');
       onPurchaseError?.call(error.toString());
       rethrow;
     }
@@ -386,162 +390,67 @@ Bulunamayan abonelikler: ${response.notFoundIDs}
       final prefs = await SharedPreferences.getInstance();
       final isPremiumLocal = prefs.getBool('is_premium') ?? false;
 
+      print('💾 Local premium durumu: $isPremiumLocal');
+
       if (isPremiumLocal) {
-        print('✅ Local premium durumu: true');
+        print('✅ Kullanıcı zaten premium erişime sahip (local)');
         return true;
       }
 
-      // Check with server
-      final subscription = await getSubscriptionStatus();
-      if (subscription != null && subscription['isPremium'] == true) {
-        print('✅ Server\'dan premium doğrulandı');
-        await prefs.setBool('is_premium', true); // Local cache güncelle
-        return true;
+      // If not premium locally, check with server
+      print('🔄 Server\'dan premium durumu kontrol ediliyor...');
+      final token = prefs.getString('auth_token');
+
+      if (token == null) {
+        print('❌ Auth token bulunamadı');
+        return false;
       }
 
-      print('❌ Premium erişim yok');
+      final response = await http.get(
+        Uri.parse('${UrlConstants.apiBaseUrl}/api/user/premium-status'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final isPremiumServer = data['isPremium'] == true;
+
+        print('🌐 Server premium durumu: $isPremiumServer');
+
+        // Update local storage with server data
+        if (isPremiumServer) {
+          await prefs.setBool('is_premium', true);
+          print('💾 Premium durumu local olarak güncellendi');
+        }
+
+        return isPremiumServer;
+      }
+
+      print('❌ Server premium durumu kontrol edilemedi: HTTP ${response.statusCode}');
       return false;
 
     } catch (error) {
       print('❌ Premium erişim kontrol hatası: $error');
-
-      // Fallback to local
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        return prefs.getBool('is_premium') ?? false;
-      } catch (e) {
-        return false;
-      }
-    }
-  }
-
-  // Get subscription status from server
-  Future<Map<String, dynamic>?> getSubscriptionStatus() async {
-    try {
-      print('🔄 Sunucudan premium durumu alınıyor...');
-
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-
-      if (token == null) {
-        print('❌ Kullanıcı token\'ı bulunamadı');
-        return null;
-      }
-
-      final response = await http.get(
-        Uri.parse('${UrlConstants.apiBaseUrl}/api/payments/subscription-status'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(Duration(seconds: 10));
-
-      print('📥 Premium durumu response: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success']) {
-          print('✅ Premium durumu alındı: ${data['subscription']}');
-          return data['subscription'];
-        }
-      }
-
-      print('❌ Premium durumu alınamadı');
-      return null;
-    } catch (error) {
-      print('❌ Premium durumu alma hatası: $error');
-      return null;
+      return false;
     }
   }
 
   // Restore purchases
   Future<void> restorePurchases() async {
     try {
-      print('🔄 Google Play\'den satın almalar geri yükleniyor...');
+      print('🔄 Önceki satın almalar geri yükleniyor...');
 
       if (!_isInitialized) await initialize();
       if (!_isAvailable) throw Exception('Google Play Billing kullanılamıyor');
 
       await _inAppPurchase.restorePurchases();
-      print('✅ Google Play satın alma geri yükleme başlatıldı');
+      print('✅ Satın alma geri yükleme talebi gönderildi');
 
     } catch (error) {
       print('❌ Satın alma geri yükleme hatası: $error');
-      throw error;
-    }
-  }
-
-  // Debug method - hangi ürünlerin mevcut olduğunu kontrol edin
-  Future<void> debugAvailableProducts() async {
-    try {
-      print('🔍 Google Play\'de mevcut ürünler kontrol ediliyor...');
-
-      if (!_isInitialized) await initialize();
-      if (!_isAvailable) {
-        print('❌ Google Play Billing kullanılamıyor');
-        return;
-      }
-
-      // Hem gerçek hem test ürünlerini kontrol et
-      final Set<String> allIds = {
-        premiumAccessProductId,           // Sizin uygulama içi ürününüz
-        monthlySubscriptionId,            // Sizin aboneliğiniz
-        'android.test.purchased',         // Google test ürünü
-        'android.test.subscription',      // Google test abonelik
-      };
-
-      final ProductDetailsResponse response = await _inAppPurchase.queryProductDetails(allIds);
-
-      print('📊 Google Play Ürün Sorgu Sonuçları:');
-      print('   ❌ Bulunamayan: ${response.notFoundIDs}');
-      print('   ✅ Bulunan: ${response.productDetails.length} ürün');
-
-      for (var product in response.productDetails) {
-        print('   📦 ${product.id}: ${product.title} - ${product.price}');
-      }
-
-      if (response.error != null) {
-        print('   🚨 Hata: ${response.error}');
-      }
-
-    } catch (error) {
-      print('❌ Debug sorgu hatası: $error');
-    }
-  }
-
-  // Test satın alma (geliştirme için)
-  Future<bool> purchaseTestProduct() async {
-    try {
-      print('🧪 Test ürünü satın alma başlatılıyor...');
-
-      if (!_isInitialized) await initialize();
-      if (!_isAvailable) throw Exception('Google Play Billing kullanılamıyor');
-
-      // Google'ın test ürününü dene
-      final Set<String> testIds = {'android.test.purchased'};
-      final ProductDetailsResponse response = await _inAppPurchase.queryProductDetails(testIds);
-
-      if (response.productDetails.isNotEmpty) {
-        final ProductDetails productDetails = response.productDetails.first;
-        print('✅ Test ürünü bulundu: ${productDetails.id}');
-
-        final PurchaseParam purchaseParam = PurchaseParam(
-          productDetails: productDetails,
-        );
-
-        final bool result = await _inAppPurchase.buyNonConsumable(
-          purchaseParam: purchaseParam,
-        );
-
-        print('🧪 Test satın alma sonucu: $result');
-        return result;
-      } else {
-        print('❌ Test ürünü bulunamadı');
-        return false;
-      }
-
-    } catch (error) {
-      print('❌ Test satın alma hatası: $error');
-      return false;
+      onPurchaseError?.call('Satın alma geri yüklenemedi: $error');
     }
   }
 

@@ -131,9 +131,9 @@ class _RegisterPageState extends State<RegisterPage> {
         // Başarı mesajı göster
         _showSuccessMessage('Hesabınız başarıyla oluşturuldu!');
 
-        // Ödeme dialogunu göster
+        // KAYIT BAŞARILIYSA DİREKT ABONELİK BAŞLAT
         await Future.delayed(Duration(seconds: 1));
-        _showPaymentDialog();
+        await _startDirectSubscription();
 
       } else {
         // Hata durumu
@@ -172,195 +172,10 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  bool _isValidEmail(String email) {
-    return email.contains('@') && email.contains('.');
-  }
-
-  void _showSuccessMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
-  // Ödeme dialog'u - 2 BUTON TEST AMAÇLI
-  void _showPaymentDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: Colors.grey[900],
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-              title: Row(
-                children: [
-                  Icon(Icons.star, color: Colors.amber, size: 28),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Premium Erişim - Test',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Kayıt işleminiz başarıyla tamamlandı! 🎉',
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Premium özellikler:',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  ...[
-                    '✅ Tüm müzik kütüphanesine erişim',
-                    '✅ Reklamsız deneyim',
-                    '✅ Yüksek kalite ses',
-                    '✅ Özel çalma listeleri',
-                    '✅ Offline dinleme',
-                  ].map((feature) => Padding(
-                    padding: EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      feature,
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                  )).toList(),
-                  SizedBox(height: 16),
-
-                  // Test amaçlı bilgi kutusu
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.science, color: Colors.blue, size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'Test Modları:',
-                              style: TextStyle(
-                                color: Colors.blue,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '• Uygulama İçi Ürün: Tek seferlik ₺180\n'
-                              '• Abonelik: Aylık ₺180',
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                // İptal butonu
-                TextButton(
-                  onPressed: _isPaymentInProgress ? null : () {
-                    Navigator.of(context).pop();
-                    // Ana sayfaya yönlendir (ücretsiz kullanıcı olarak)
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => MainHomePage()),
-                    );
-                  },
-                  child: Text(
-                    'Şimdi Değil',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-
-                // Abonelik butonu (TEST)
-                ElevatedButton(
-                  onPressed: _isPaymentInProgress ? null : () => _handleSubscriptionPurchase(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: _isPaymentInProgress
-                      ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      strokeWidth: 2,
-                    ),
-                  )
-                      : Text('Abonelik\n₺180/ay', textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
-                ),
-
-                SizedBox(width: 8),
-
-                // Uygulama içi ürün butonu (TEST)
-                ElevatedButton(
-                  onPressed: _isPaymentInProgress ? null : () => _handleInAppPurchase(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber,
-                    foregroundColor: Colors.black,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: _isPaymentInProgress
-                      ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                      strokeWidth: 2,
-                    ),
-                  )
-                      : Text('Tek Ödeme\n₺180', textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ABONELIK SATINALMASI (TEST)
-  Future<void> _handleSubscriptionPurchase() async {
+  // DİREKT ABONELİK BAŞLATMA - Dialog yok, seçenek yok
+  Future<void> _startDirectSubscription() async {
     try {
-      print('🔄 ABONELİK satın alma başlatılıyor...');
-
-      Navigator.of(context).pop(); // Dialog'u kapat
+      print('🔄 Kayıt sonrası direkt abonelik başlatılıyor...');
 
       setState(() {
         _isPaymentInProgress = true;
@@ -374,7 +189,7 @@ class _RegisterPageState extends State<RegisterPage> {
             setState(() {
               _isPaymentInProgress = false;
             });
-            _navigateToMainWithSuccess('Abonelik aktifleştirildi!');
+            _navigateToMainWithSuccess('Abonelik başarıyla aktifleştirildi!');
           }
         },
         onError: (String error) {
@@ -392,7 +207,7 @@ class _RegisterPageState extends State<RegisterPage> {
         },
       );
 
-      // ABONELİK SATINALMASI - direkt Google Play
+      // ABONELİK SATINALMASI - direkt Google Play açılır
       final bool success = await _paymentService.purchaseMonthlySubscription();
 
       if (!success) {
@@ -403,7 +218,7 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
     } catch (error) {
-      print('❌ Abonelik satın alma exception: $error');
+      print('❌ Direkt abonelik satın alma exception: $error');
       setState(() {
         _isPaymentInProgress = false;
       });
@@ -411,60 +226,24 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  // UYGULAMA İÇİ ÜRÜN SATINALMASI (TEST)
-  Future<void> _handleInAppPurchase() async {
-    try {
-      print('🔄 UYGULAMA İÇİ ÜRÜN satın alma başlatılıyor...');
+  bool _isValidEmail(String email) {
+    return email.contains('@') && email.contains('.');
+  }
 
-      Navigator.of(context).pop(); // Dialog'u kapat
-
-      setState(() {
-        _isPaymentInProgress = true;
-      });
-
-      // Payment service callback'lerini ayarla
-      _paymentService.setCallbacks(
-        onSuccess: () {
-          print('✅ Uygulama içi ürün ödeme başarılı!');
-          if (mounted) {
-            setState(() {
-              _isPaymentInProgress = false;
-            });
-            _navigateToMainWithSuccess('Premium erişim aktifleştirildi!');
-          }
-        },
-        onError: (String error) {
-          print('❌ Uygulama içi ürün ödeme hatası: $error');
-          if (mounted) {
-            setState(() {
-              _isPaymentInProgress = false;
-            });
-            _showQuickError('Premium ürün hatası: $error');
-          }
-        },
-        onPending: () {
-          print('⏳ Uygulama içi ürün ödeme bekleniyor...');
-          _showQuickMessage('Premium ödeme işlemi devam ediyor...', Colors.orange);
-        },
-      );
-
-      // UYGULAMA İÇİ ÜRÜN SATINALMASI - direkt Google Play
-      final bool success = await _paymentService.purchasePremiumAccess();
-
-      if (!success) {
-        setState(() {
-          _isPaymentInProgress = false;
-        });
-        _showQuickError('Premium ürün ödeme ekranı açılamadı');
-      }
-
-    } catch (error) {
-      print('❌ Uygulama içi ürün satın alma exception: $error');
-      setState(() {
-        _isPaymentInProgress = false;
-      });
-      _showQuickError('Premium ürün hatası: $error');
-    }
+  void _showSuccessMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 8),
+            Text(message),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   // Hızlı mesaj gösterme
@@ -517,60 +296,46 @@ class _RegisterPageState extends State<RegisterPage> {
     });
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        title: Text('Kayıt Ol', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.black,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => LoginPage()),
-            );
-          },
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Logo ve başlık
+              // Logo veya başlık
               Center(
                 child: Column(
                   children: [
-                    Container(
-                      width: 80,
+                    // Logo görseli
+                    Image.asset(
+                      'assets/your_logo.png',
                       height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        Icons.music_note,
-                        size: 40,
-                        color: Colors.black,
-                      ),
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Logo bulunamazsa fallback
+                        return Icon(
+                          Icons.music_note,
+                          size: 80,
+                          color: Colors.white,
+                        );
+                      },
                     ),
-                    SizedBox(height: 20),
+                    SizedBox(height: 16),
                     Text(
-                      'Hesap Oluştur',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'DJ App ailesine katılın',
+                      'Hesabınızı oluşturun',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 16,
@@ -579,18 +344,18 @@ class _RegisterPageState extends State<RegisterPage> {
                   ],
                 ),
               ),
-
-              SizedBox(height: 30),
+              SizedBox(height: 40),
 
               // Hata mesajı
               if (_errorMessage.isNotEmpty)
                 Container(
-                  margin: EdgeInsets.only(bottom: 20),
+                  width: double.infinity,
                   padding: EdgeInsets.all(12),
+                  margin: EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
                     color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
@@ -669,9 +434,6 @@ class _RegisterPageState extends State<RegisterPage> {
                         if (value == null || value.isEmpty) {
                           return 'Ad gerekli';
                         }
-                        if (value.length > 50) {
-                          return 'Ad en fazla 50 karakter olabilir';
-                        }
                         return null;
                       },
                     ),
@@ -699,9 +461,6 @@ class _RegisterPageState extends State<RegisterPage> {
                         if (value == null || value.isEmpty) {
                           return 'Soyad gerekli';
                         }
-                        if (value.length > 50) {
-                          return 'Soyad en fazla 50 karakter olabilir';
-                        }
                         return null;
                       },
                     ),
@@ -712,7 +471,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       controller: _phoneController,
                       style: TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        labelText: 'Telefon (Opsiyonel)',
+                        labelText: 'Telefon',
                         labelStyle: TextStyle(color: Colors.white70),
                         prefixIcon: Icon(Icons.phone, color: Colors.white70),
                         enabledBorder: UnderlineInputBorder(
@@ -726,15 +485,6 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                       ),
                       keyboardType: TextInputType.phone,
-                      validator: (value) {
-                        // Telefon opsiyonel, ama girilmişse geçerli olmalı
-                        if (value != null && value.isNotEmpty) {
-                          if (value.length < 10) {
-                            return 'Telefon numarası en az 10 haneli olmalıdır';
-                          }
-                        }
-                        return null;
-                      },
                     ),
                     SizedBox(height: 20),
 
@@ -802,7 +552,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
                     // Kayıt butonu
                     ElevatedButton(
-                      onPressed: _isLoading ? null : _register,
+                      onPressed: (_isLoading || _isPaymentInProgress) ? null : _register,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
@@ -812,24 +562,28 @@ class _RegisterPageState extends State<RegisterPage> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: _isLoading
+                      child: (_isLoading || _isPaymentInProgress)
                           ? Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                            strokeWidth: 2,
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                              strokeWidth: 2,
+                            ),
                           ),
-                          SizedBox(width: 10),
-                          Text('Kayıt oluşturuluyor...'),
+                          SizedBox(width: 12),
+                          Text(
+                            _isLoading ? 'Kaydediliyor...' : 'Ödeme işlemi...',
+                            style: TextStyle(fontSize: 16),
+                          ),
                         ],
                       )
                           : Text(
-                        'Hesap Oluştur',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        'Kayıt Ol & Abonelik Başlat',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
                     SizedBox(height: 20),
@@ -839,11 +593,11 @@ class _RegisterPageState extends State<RegisterPage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'Zaten hesabınız var mı?',
+                          'Zaten hesabınız var mı? ',
                           style: TextStyle(color: Colors.white70),
                         ),
-                        TextButton(
-                          onPressed: () {
+                        GestureDetector(
+                          onTap: () {
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(builder: (context) => LoginPage()),
@@ -854,6 +608,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
                             ),
                           ),
                         ),

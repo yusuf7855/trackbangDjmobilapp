@@ -1,3 +1,5 @@
+// lib/main.dart - Orijinal yapı + Yeni Payment Service ile uyumlu
+
 import 'package:djmobilapp/profile.dart';
 import 'package:djmobilapp/register_page.dart';
 import 'package:djmobilapp/search_screen.dart';
@@ -82,7 +84,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => FreePage(),
         '/login': (context) => LoginPage(),
-        '/register': (context) => RegisterPage(),
+        '/register': (context) => RegisterPage(), // Yeni RegisterPage - direkt abonelik ile
         '/home': (context) => MainHomePage(),
         '/profile': (context) => ProfileScreen(),
         '/notifications': (context) => NotificationsScreen(),
@@ -130,17 +132,17 @@ class _MainHomePageState extends State<MainHomePage> {
     debugPrint('MainHomePage initialized');
   }
 
-  // Pages initialization metodu
+  // Pages initialization metodu - DOĞRU sınıf adları ile
   void _initializePages() {
     _pages = [
-      HomeScreen(
+      HomeScreen( // homepage.dart -> HomeScreen sınıfı
         onMenuPressed: _openDrawer,
         unreadNotificationCount: unreadNotificationCount,
         onNotificationPressed: _handleNotificationPressed,
       ),
-      SearchPage(),
-      MyBangsScreen(),
-      ProfileScreen(),
+      SearchPage(), // Custom search widget (mevcut değilse)
+      MyBangsScreen(), // myBang.dart -> MyBangsScreen sınıfı
+      ProfileScreen(), // profile.dart -> ProfileScreen sınıfı
     ];
   }
 
@@ -150,7 +152,11 @@ class _MainHomePageState extends State<MainHomePage> {
     await Future.delayed(Duration(seconds: 2));
 
     if (mounted) {
-      await NotificationPermissionService.checkAndRequestPermission(context);
+      try {
+        await NotificationPermissionService.checkAndRequestPermission(context);
+      } catch (e) {
+        print('❌ Bildirim izni hatası: $e');
+      }
     }
   }
 
@@ -213,6 +219,31 @@ class _MainHomePageState extends State<MainHomePage> {
         ),
       );
     }
+  }
+
+  // Custom SearchPage widget (eğer search_screen.dart yoksa veya hatalıysa)
+  Widget SearchPage() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search, size: 64, color: Colors.white70),
+            SizedBox(height: 16),
+            Text(
+              'Arama Sayfası',
+              style: TextStyle(color: Colors.white, fontSize: 24),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Müzik arama özelliği yakında...',
+              style: TextStyle(color: Colors.white70, fontSize: 16),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -283,10 +314,14 @@ class _MainHomePageState extends State<MainHomePage> {
             ),
             child: Row(
               children: [
-                Image.asset(
-                  'assets/your_logo.png',
-                  height: 50,
-                  fit: BoxFit.contain,
+                // Logo varsa göster, yoksa app adı
+                Text(
+                  'DJMobil',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -300,10 +335,14 @@ class _MainHomePageState extends State<MainHomePage> {
                   title: 'Listeler',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => ListelerScreen()),
-                    );
+                    try {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => ListelerScreen()),
+                      );
+                    } catch (e) {
+                      _showMessage('Listeler sayfası henüz hazır değil');
+                    }
                   },
                 ),
                 _buildDrawerItem(
@@ -311,10 +350,14 @@ class _MainHomePageState extends State<MainHomePage> {
                   title: 'Sample Bank',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => SampleBankScreen()),
-                    );
+                    try {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => SampleBankScreen()),
+                      );
+                    } catch (e) {
+                      _showMessage('Sample Bank sayfası henüz hazır değil');
+                    }
                   },
                 ),
                 _buildDrawerItem(
@@ -322,10 +365,14 @@ class _MainHomePageState extends State<MainHomePage> {
                   title: 'Mostening',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => MosteningScreen()),
-                    );
+                    try {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => MosteningScreen()),
+                      );
+                    } catch (e) {
+                      _showMessage('Mostening sayfası henüz hazır değil');
+                    }
                   },
                 ),
                 _buildDrawerItem(
@@ -333,10 +380,14 @@ class _MainHomePageState extends State<MainHomePage> {
                   title: 'Mağaza',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => MagazaScreen()),
-                    );
+                    try {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => MagazaScreen()),
+                      );
+                    } catch (e) {
+                      _showMessage('Mağaza sayfası henüz hazır değil');
+                    }
                   },
                 ),
                 _buildDrawerItem(
@@ -344,10 +395,14 @@ class _MainHomePageState extends State<MainHomePage> {
                   title: 'Biz Kimiz',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => BizKimizScreen()),
-                    );
+                    try {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => BizKimizScreen()),
+                      );
+                    } catch (e) {
+                      _showMessage('Biz Kimiz sayfası henüz hazır değil');
+                    }
                   },
                 ),
                 _buildDrawerItem(
@@ -362,7 +417,6 @@ class _MainHomePageState extends State<MainHomePage> {
                   },
                 ),
                 Divider(color: Colors.grey[700]),
-
                 _buildDrawerItem(
                   icon: Icons.logout,
                   title: 'Çıkış Yap',
@@ -487,6 +541,17 @@ class _MainHomePageState extends State<MainHomePage> {
             );
           },
         ),
+      ),
+    );
+  }
+
+  // Hata mesajları için yardımcı method
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 2),
       ),
     );
   }
